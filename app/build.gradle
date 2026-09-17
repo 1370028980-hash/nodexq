@@ -1,0 +1,56 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.tyl.xiangqi.ndxq'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.tyl.xiangqi.nodechess'
+        minSdk 23
+        targetSdk 35
+        versionCode 58
+        versionName '20.5'
+    }
+
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging true
+        }
+    }
+
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+
+// Android 10/Q 之后不能再执行 filesDir 里的二进制。
+// 参考象棋鱼的做法：把 app/src/main/pikafish/<abi>/lib*.so 打包为 native libs，
+// 安装后系统会把它们提取到 ApplicationInfo.nativeLibraryDir，然后 ProcessBuilder 从那里启动。
+tasks.register('nativeLibsToJar', Jar) {
+    description = 'Package executable Pikafish binary and NNUE file as native libraries.'
+    destinationDirectory = layout.buildDirectory.dir('native-libs').get().asFile
+    archiveBaseName = 'native-libs'
+    from(fileTree('src/main/pikafish') {
+        include '**/*.so'
+        // Duffish 2.2 的当前 libduf.so 已内嵌完整 xiangqi NNUE。
+        // 不再把重复的外置网络伪装成 JNI 库打包，避免强制 EvalFile 后加载失败。
+        exclude '**/xiangqi-agg20260512.nnue.so'
+        exclude '**/libxiangqi-agg20260512.nnue.so'
+    }) {
+        // pikafish.nnue.so 仍供 131 等 Pikafish 系引擎使用；打包时改成
+        // Android 可稳定提取的 libpikafish.nnue.so。
+        rename { String fileName ->
+            fileName.equalsIgnoreCase('pikafish.nnue.so') ? 'libpikafish.nnue.so' : fileName
+        }
+    }
+    into 'lib/'
+}
+
+preBuild.dependsOn nativeLibsToJar
+
+dependencies {
+    implementation files("${buildDir}/native-libs/native-libs.jar")
+}

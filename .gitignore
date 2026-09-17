@@ -1,0 +1,29 @@
+# ========== 编译产物与缓存（本地生成，不入库）==========
+.gradle/
+.idea/
+build/
+app/build/
+app/release/
+.cxx/
+captures/
+
+# ========== 本机专属配置 ==========
+local.properties
+*.iml
+.DS_Store
+
+# ========== 引擎库（第三方二进制，体积大，自行补充）==========
+# 4 个 so 合计约 70MB，其中 pikafish.nnue.so 单独 50MB
+app/src/main/pikafish/
+
+# ========== 开局库（第三方数据文件，未随仓库分发）==========
+# 需要时自行放入 app/src/main/assets/books/rp/ 并命名为 book.obk
+# 未提供时应用会跳过开局库加载，不影响编译与对弈
+app/src/main/assets/books/rp/book.obk
+
+# ========== 打包产物与密钥 ==========
+*.apk
+*.aab
+*.jks
+*.keystore
+*.idsig
