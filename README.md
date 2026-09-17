@@ -12,6 +12,13 @@
 
 ---
 
+## 难度是经过校准的
+
+- **每一档都经过校准**，难度名和真实棋力基本对得上——写着「特级大师」，就是真人特级大师的水平，不会出现实际棋力远超同级别人类棋手的情况。
+- **采用锁节点的方式压制引擎棋力**：不管你用什么配置的手机，都能体会到同样的棋力，不会因为手机性能高，人机就跟着变强。
+
+---
+
 ## 功能
 
 ### 对弈
@@ -73,12 +80,12 @@
 
 把以下文件放入 `app/src/main/pikafish/arm64-v8a/`：
 
-| 文件名 | 对应引擎 | 说明 |
-|---|---|---|
-| `lib131.so` | **131** | Pikafish 皮卡鱼，棋力最强，用于最高难度与分析 |
-| `pikafish.nnue.so` | — | Pikafish 的 NNUE 权重（打包时会自动改名为 `libpikafish.nnue.so`） |
-| `libHCE.so` | **HCE** | Pikafish 传统评估版，无神经网络，用于低难度档 |
-| `libduf.so` | **duf** | Duffish3，NNUE 已完整内嵌在二进制里，无需外置权重 |
+| 文件名 | 对应引擎 | 说明 | 来源 |
+|---|---|---|---|
+| `lib131.so` | **131** | 皮卡鱼，棋力最强，用于最高难度与分析 | <https://github.com/official-pikafish/Pikafish> |
+| `pikafish.nnue.so` | — | 131 使用的 NNUE 权重（打包时会自动改名为 `libpikafish.nnue.so`） | 随皮卡鱼一同发布 |
+| `libHCE.so` | **HCE** | 皮卡鱼传统评估版（无神经网络），用于低难度档 | <https://github.com/skystarspython/Pikafish-HCE> |
+| `libduf.so` | **duf** | Duffish3，NNUE 已完整内嵌在二进制里，无需外置权重 | <https://github.com/lxsgx23/Duffish> |
 
 > 另有一个历史遗留文件 `libqsll-static-exec.so`，当前源码已无引用，可不提供。
 
@@ -129,12 +136,13 @@ app/src/main/
 
 | 组件 | 许可 | 来源 |
 |---|---|---|
-| **Pikafish**（皮卡鱼） | GNU GPL v3 | <https://github.com/official-pikafish/Pikafish> |
-| Pikafish 的 NNUE 权重文件 | 另有单独使用条款 | 同上，限非商用并附有禁用软件名单，使用前请自行确认 |
-| **Duffish3**（duf） | 请向其作者确认 | 第三方引擎 |
-| rp 开局库 | 请自行确认 | 第三方数据文件 |
+| **Pikafish**（皮卡鱼，131 引擎） | GNU GPL v3 | <https://github.com/official-pikafish/Pikafish> |
+| **Pikafish-HCE**（HCE 引擎） | GNU GPL v3 | <https://github.com/skystarspython/Pikafish-HCE> |
+| Pikafish 的 NNUE 权重文件 | 另有单独使用条款 | 随皮卡鱼一同发布；限非商用并附有禁用软件名单，使用前请自行确认 |
+| **Duffish3**（duf 引擎） | 请向其作者确认 | <https://github.com/lxsgx23/Duffish> |
+| rp 开局库（`book.obk`） | 请自行确认 | 第三方数据文件，本仓库未分发 |
 
-Pikafish 派生自国际象棋引擎 Stockfish，继承其 GPL v3 许可。若你分发包含这些引擎的 APK，需一并遵守 GPL v3 的分发要求。
+Pikafish 与 Pikafish-HCE 派生自国际象棋引擎 Stockfish 的代码体系，继承其 GPL v3 许可。若你分发包含这些引擎的 APK，需一并遵守 GPL v3 的分发要求。
 
 ---
 
