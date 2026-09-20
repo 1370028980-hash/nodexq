@@ -346,11 +346,15 @@ final class ManualRecordController {
     }
 
     void showBoardClipboardDialog() {
+        final String[] items = host.evaluationMode
+                ? new String[]{"复制局面", "复制棋谱", "加入错题本"}
+                : new String[]{"复制局面", "复制棋谱", "粘贴", "粘贴（天天象棋URL）", "加入错题本"};
         new AlertDialog.Builder(host)
                 .setTitle("棋盘操作")
-                .setItems(new String[]{"复制局面", "复制棋谱", "粘贴", "粘贴（天天象棋URL）", "加入错题本"}, (dialog, which) -> {
+                .setItems(items, (dialog, which) -> {
                     if (which == 0) copyFen();
                     else if (which == 1) copyManual();
+                    else if (host.evaluationMode) host.addCurrentPositionToCorrectionBook();
                     else if (which == 2) pasteFromClipboard();
                     else if (which == 3) pasteTencentUrlFromClipboard();
                     else host.addCurrentPositionToCorrectionBook();

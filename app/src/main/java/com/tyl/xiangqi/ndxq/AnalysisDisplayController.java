@@ -185,10 +185,17 @@ final class AnalysisDisplayController {
     void appendAnalysisArrows(List<ChessBoardView.AnalysisArrow> arrows,
                               AnalysisDisplayEntry entry, int label, int maxSteps) {
         if (entry == null) return;
+        boolean firstMoveIsRed = host.boardView == null || host.boardView.isRedToMove();
+        int currentSideColor = host.boardView == null ? Color.TRANSPARENT
+                : host.boardView.getSideArrowColor(firstMoveIsRed);
         for (int i = 0; i < entry.pv.size() && i < maxSteps; i++) {
+            boolean moveIsRed = (i % 2 == 0) ? firstMoveIsRed : !firstMoveIsRed;
+            if (host.showOnlyCurrentSideArrows() && moveIsRed != firstMoveIsRed) continue;
             try {
                 arrows.add(new ChessBoardView.AnalysisArrow(
-                        Move.fromEngineStep(entry.pv.get(i)), label, i == 1, i >= 2));
+                        Move.fromEngineStep(entry.pv.get(i)), label, i == 1, i >= 2,
+                        host.showOnlyCurrentSideArrows() ? currentSideColor : Color.TRANSPARENT,
+                        null, Color.TRANSPARENT));
             } catch (Exception ignored) {
             }
         }

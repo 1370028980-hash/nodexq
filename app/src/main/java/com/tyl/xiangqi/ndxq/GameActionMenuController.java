@@ -132,11 +132,13 @@ final class GameActionMenuController {
         Button arrowBtn = menuStayButton(arrowMode.getText().toString());
         arrowBtn.setOnClickListener(v -> {
             if (isMultiPvArrowMode()) {
-                host.arrowStepCount = host.arrowStepCount == 0 ? 2 : 0;
+                host.engineArrowDisplayMode = (host.engineArrowDisplayMode + 1) % 3;
+                host.arrowStepCount = host.engineArrowDisplayMode == 0 ? 0 : 2;
             } else {
                 host.arrowStepCount = host.arrowStepCount >= 4 ? 0 : host.arrowStepCount + 1;
+                host.engineArrowDisplayMode = host.arrowStepCount > 0 ? 1 : 0;
             }
-            host.showEngineArrows = host.arrowStepCount > 0;
+            host.showEngineArrows = host.engineArrowDisplayMode != 0;
             if (host.boardView != null) {
                 host.boardView.setShowArrow(host.showEngineArrows);
                 if (host.showEngineArrows) host.updateAnalysisArrows();
@@ -144,9 +146,7 @@ final class GameActionMenuController {
                         Collections.<ChessBoardView.AnalysisArrow>emptyList());
             }
             host.saveLauncherPreferences();
-            arrowBtn.setText(host.arrowStepCount <= 0 ? "不显示箭头"
-                    : (host.analysisConfiguredMultiPv > 1 ? "显示箭头"
-                    : "箭头显示" + host.arrowStepCount + "步"));
+            updateArrowModeButtonText(arrowBtn);
         });
         if (host.selfAnalysisMode) {
             rows[7].addView(arrowBtn, menuActionLp());
@@ -279,7 +279,8 @@ final class GameActionMenuController {
     private void updateArrowModeButtonText(TextView button) {
         if (button == null) return;
         if (isMultiPvArrowMode()) {
-            button.setText(host.showEngineArrows ? "显示箭头" : "不显示箭头");
+            button.setText(host.engineArrowDisplayMode == 0 ? "不显示箭头"
+                    : (host.engineArrowDisplayMode == 2 ? "只显示当前方箭头" : "显示所有箭头"));
         } else if (host.arrowStepCount <= 0) {
             button.setText("不显示箭头");
         } else {

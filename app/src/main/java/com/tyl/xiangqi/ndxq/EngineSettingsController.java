@@ -9,6 +9,7 @@ import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
@@ -67,6 +68,10 @@ final class EngineSettingsController {
 
     private void buildOptionsDialog(List<PikafishEngine.EngineOption> options) {
         ScrollView scroll = new ScrollView(host);
+        scroll.setFillViewport(false);
+        scroll.setVerticalScrollBarEnabled(true);
+        scroll.setScrollbarFadingEnabled(false);
+        scroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
         LinearLayout panel = new LinearLayout(host);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(host.dp(8), host.dp(2), host.dp(8), host.dp(2));
@@ -124,6 +129,10 @@ final class EngineSettingsController {
                         .setNegativeButton("取消", null)
                         .show()));
         dialog.show();
+        if (dialog.getWindow() != null) {
+            int maxHeight = Math.round(host.getResources().getDisplayMetrics().heightPixels * 0.82f);
+            dialog.getWindow().setLayout(WindowManager.LayoutParams.MATCH_PARENT, maxHeight);
+        }
     }
 
     /** 应用自己的显示选项，不会向引擎发送 UCI setoption。 */

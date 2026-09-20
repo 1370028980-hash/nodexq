@@ -54,7 +54,7 @@ final class AnalysisSessionController {
             host.appendLog("分析已停止。\n");
             return;
         }
-        if (!host.selfAnalysisMode) host.ratingDisqualified = true;
+        if (!host.selfAnalysisMode) host.disqualifyRating("在评测对局中开启放大镜分析");
         if (host.computerRedBlackActive) {
             host.computerSideController.cancelPendingImmediateRequest();
             host.computerRedActive = false;

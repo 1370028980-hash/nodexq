@@ -84,9 +84,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 
-/** 节点象棋 V20.5。 */
+/** 节点象棋。版本号由 Gradle BuildConfig 提供。 */
 public final class MainActivity extends Activity implements ChessBoardView.Listener {
-    static final String VERSION_NAME = "V20.5";
+    static final String VERSION_NAME = "V" + BuildConfig.VERSION_NAME;
     static final String PREFS = "human_vs_engine_v1";
     static final String MANUAL_UCI_PREFIX = "manual_uci::";
     static final String SAVED_ANALYSIS_RECORD = "saved_analysis_record";
@@ -322,6 +322,7 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
     /** 当前普通对局是否从自选难度页进入，用于系统返回键回到对应入口。 */
     private boolean customDifficultySession;
     boolean evaluationLauncherVisible;
+    boolean evaluationRatingHistoryVisible;
     boolean customDifficultyLauncherVisible;
     Button evaluationDrawToolbarButton;
     Button evaluationResignToolbarButton;
@@ -450,13 +451,25 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
     View launcherScreenRoot;
     SegmentedDifficultyView launcherDifficultyView;
     boolean launcherContrastRefreshPosted;
-    /** 引擎页箭头显示总开关；具体显示步数由 arrowStepCount 决定。 */
+    /** 引擎页箭头显示模式：0=不显示，1=显示全部，2=只显示当前行棋方。 */
+    int engineArrowDisplayMode = 1;
+    /** 引擎页箭头显示总开关；由 engineArrowDisplayMode 派生并兼容旧调用方。 */
     boolean showEngineArrows = true;
-    /** 单 PV 时循环 1/2/3/4/0 步；多 PV 只把 0 与“显示”两种状态互相切换。 */
+    /** 单 PV 时循环 1/2/3/4/0 步；多 PV 使用 engineArrowDisplayMode 三态。 */
     int arrowStepCount = 2;
 
     int getArrowStepCount() {
         return arrowStepCount;
+    }
+
+    boolean showOnlyCurrentSideArrows() {
+        return engineArrowDisplayMode == 2;
+    }
+
+    void disqualifyRating(String reason) {
+        if (!evaluationMode || selfAnalysisMode || !ratingEligible || ratingDisqualified) return;
+        ratingDisqualified = true;
+        appendLog("本局已取消等级分计算资格：" + reason + "；连胜记录保留。\n");
     }
     /** 棋谱+引擎二合一布局开关。 */
     boolean combinedManualEngineMode;
@@ -647,7 +660,10 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         selectedGameTab = clamp(sp.getInt("selected_game_tab", 0), 0, 2);
         boolean oldArrowEnabled = sp.getBoolean("show_engine_arrows", true);
         arrowStepCount = clamp(sp.getInt("engine_arrow_steps", oldArrowEnabled ? 2 : 0), 0, 4);
-        showEngineArrows = arrowStepCount > 0;
+        int savedArrowMode = sp.getInt("engine_arrow_display_mode", -1);
+        engineArrowDisplayMode = savedArrowMode >= 0
+                ? clamp(savedArrowMode, 0, 2) : (arrowStepCount > 0 ? 1 : 0);
+        showEngineArrows = engineArrowDisplayMode != 0;
         soundEnabled = sp.getBoolean("move_sound_enabled", true);
         combinedManualEngineMode = sp.getBoolean("combined_manual_engine_mode", false);
         int savedManualMs = Math.max(0, sp.getInt("manual_play_movetime_ms", 100));
@@ -682,6 +698,7 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
                 .putInt("manual_store_format", pendingStoreFormat)
                 .putInt("selected_game_tab", selectedGameTab)
                 .putBoolean("show_engine_arrows", showEngineArrows)
+                .putInt("engine_arrow_display_mode", engineArrowDisplayMode)
                 .putInt("engine_arrow_steps", arrowStepCount)
                 .putBoolean("move_sound_enabled", soundEnabled)
                 .putBoolean("combined_manual_engine_mode", combinedManualEngineMode)
@@ -745,6 +762,7 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
     void showLauncherScreen() {
         evaluationMode = false;
         evaluationLauncherVisible = false;
+        evaluationRatingHistoryVisible = false;
         customDifficultyLauncherVisible = false;
         customDifficultySession = false;
         stopAllEngineWork();
@@ -772,6 +790,7 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
 
     void showEvaluationLauncher() {
         evaluationLauncherVisible = true;
+        evaluationRatingHistoryVisible = false;
         customDifficultyLauncherVisible = false;
         stopAllEngineWork();
         gameScreenVisible = false;
@@ -2916,6 +2935,7 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
     void markCurrentLineAsAnalysisOnly(String reason) {
         if (!competitiveResultEligible) return;
         competitiveResultEligible = false;
+        disqualifyRating(reason);
         appendLog(reason + "：本棋谱后续仅作为分析记录，不计入历史战绩。\n");
         persistCurrentSession();
     }
@@ -2980,7 +3000,6 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
     }
 
     void stopSearchForPositionChange() {
-        if (!engineMoves.isEmpty() && !selfAnalysisMode) ratingDisqualified = true;
         operationGeneration++;
         computerMoveGeneration++;
         computerSideController.cancelPendingImmediateRequest();
@@ -3351,6 +3370,8 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
     }
 
     void showEvaluationRatingHistory() {
+        evaluationRatingHistoryVisible = true;
+        evaluationLauncherVisible = false;
         LauncherController.showEvaluationRatingHistory(this);
     }
 
@@ -3782,6 +3803,10 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         }
         if (recentScreenVisible) {
             showLauncherScreen();
+            return;
+        }
+        if (evaluationRatingHistoryVisible) {
+            showEvaluationLauncher();
             return;
         }
         if (gameScreenVisible && evaluationMode) {

@@ -15,7 +15,9 @@ final class EvaluationRatingController {
     void updateAfterGame(GameEndType type) {
         if (host.ratingCounted) return;
         if (!host.ratingEligible || host.ratingDisqualified || host.selfAnalysisMode) {
-            clearWinStreak();
+            if (host.ratingDisqualified) {
+                host.appendLog("本局等级分不计算；既有连胜记录保持不变。\n");
+            }
             return;
         }
         if ((type == GameEndType.AGREED_DRAW || type == GameEndType.NO_CAPTURE_DRAW)

@@ -78,6 +78,9 @@ final class GameMoveController {
         if (existingVariationIndex >= 0) {
             host.pendingMoveScoreRed = null;
             host.pendingMoveMatePly = 0;
+            if (host.currentPly < host.engineMoves.size() && !host.selfAnalysisMode) {
+                host.disqualifyRating("从历史局面切换到另一条分支");
+            }
             host.switchToVariation(host.currentPly, existingVariationIndex);
             if (host.selfAnalysisMode && host.computerRedBlackActive) {
                 host.handler.post(host::startComputerSideMove);
@@ -121,6 +124,7 @@ final class GameMoveController {
                     .setPositiveButton("确定", (d, w) -> {
                         if (host.boardView == null || host.selfAnalysisMode
                                 || host.currentPly != overwriteNode) return;
+                        host.disqualifyRating("从历史局面重新走出不同着法");
                         deleteAllBranchesAtOrAfter(overwriteNode);
                         host.truncateListsTo(overwriteNode);
                         host.rebuildBoardToPly(overwriteNode);

@@ -4,12 +4,16 @@ android {
     namespace 'com.tyl.xiangqi.ndxq'
     compileSdk 35
 
+    buildFeatures {
+        buildConfig true
+    }
+
     defaultConfig {
         applicationId 'com.tyl.xiangqi.nodechess'
         minSdk 23
         targetSdk 35
-        versionCode 58
-        versionName '20.5'
+        versionCode 59
+        versionName '20.6'
     }
 
     packagingOptions {
