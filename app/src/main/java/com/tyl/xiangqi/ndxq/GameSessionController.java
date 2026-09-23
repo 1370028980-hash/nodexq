@@ -63,7 +63,9 @@ final class GameSessionController {
             snapshot.gameResultTag = host.gameResultTag;
             snapshot.baseFen = host.baseFen;
             snapshot.difficultyIndex = host.selectedDifficultyIndex;
+            snapshot.currentPly = host.currentPly;
             snapshot.enginePlaysRed = host.enginePlaysRed;
+            snapshot.evaluationNavigationLocked = host.evaluationNavigationLocked;
             snapshot.sixtyMoveDrawArmedPly = host.sixtyMoveDrawArmedPly;
             snapshot.engineSteps.addAll(host.engineMoves);
             snapshot.readableMoves.addAll(host.readableMoves);
@@ -174,8 +176,11 @@ final class GameSessionController {
         for (Integer node : new ArrayList<Integer>(host.manualVariations.keySet())) {
             if (node != null) host.ensureBranchLabels(node);
         }
-        host.currentPly = host.engineMoves.size();
+        host.currentPly = host.evaluationMode && saved.currentPly >= 0
+                ? Math.min(host.engineMoves.size(), saved.currentPly)
+                : host.engineMoves.size();
         host.completedDuelGame = saved.completedDuelGame && !host.selfAnalysisMode;
+        host.evaluationNavigationLocked = saved.evaluationNavigationLocked && host.evaluationMode;
         host.postGameSandboxActive = false;
         host.gameOver = host.completedDuelGame;
         host.terminalDialogShown = host.completedDuelGame;

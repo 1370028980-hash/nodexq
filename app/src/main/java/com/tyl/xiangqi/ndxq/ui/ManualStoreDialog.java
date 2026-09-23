@@ -22,7 +22,7 @@ public final class ManualStoreDialog {
         final RadioButton[] radios = new RadioButton[]{
                 new RadioButton(activity), new RadioButton(activity), new RadioButton(activity)
         };
-        String[] labels = new String[]{"XQF 格式", "PGN 格式", "东萍 UBB（.htm）"};
+        String[] labels = new String[]{"XQF", "PGN", "UBB"};
         for (int i = 0; i < radios.length; i++) {
             final RadioButton selected = radios[i];
             selected.setChecked(currentFormat == i);
@@ -33,12 +33,6 @@ public final class ManualStoreDialog {
             box.addView(formatRow(activity, labels[i], selected), new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, dp(activity, 42)));
         }
-        TextView tip = new TextView(activity);
-        tip.setText("选择格式后点击“选择路径”，由系统文件管理器决定文件名和存储位置。");
-        tip.setTextSize(12);
-        tip.setTextColor(Color.rgb(92, 98, 94));
-        tip.setPadding(0, dp(activity, 6), 0, dp(activity, 4));
-        box.addView(tip);
         new AlertDialog.Builder(activity).setTitle("存储棋谱").setView(box)
                 .setPositiveButton("选择路径", (dialog, which) -> {
                     int selected = 0;

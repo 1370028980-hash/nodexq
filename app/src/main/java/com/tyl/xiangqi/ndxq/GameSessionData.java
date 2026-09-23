@@ -19,7 +19,9 @@ final class SavedSession {
     boolean competitiveResultEligible;
     boolean completedDuelGame;
     boolean enginePlaysRed;
+    boolean evaluationNavigationLocked;
     int difficultyIndex;
+    int currentPly = -1;
     int sixtyMoveDrawArmedPly = -1;
     String gameResultTag = "*";
     String baseFen = START_FEN;

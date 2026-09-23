@@ -681,7 +681,10 @@ final class ManualRecordController {
                 loadPastedPosition(normalizedFen, strictSteps, null, null);
                 host.appendLog("已从剪贴板粘贴 FEN / moves。\n");
             } else {
-                PgnManualUtils.ParsedManual manual = PgnManualUtils.parse(text, MainActivity.START_FEN);
+                boolean ubb = DhtmlXqManualUtils.looksLikeDhtmlXq(text);
+                PgnManualUtils.ParsedManual manual = ubb
+                        ? DhtmlXqManualUtils.parse(text, MainActivity.START_FEN)
+                        : PgnManualUtils.parse(text, MainActivity.START_FEN);
                 if (manual.moves.isEmpty() && !manual.hasExplicitFen) {
                     showRecognitionError();
                     return;
@@ -700,7 +703,8 @@ final class ManualRecordController {
                 if (manual.result == 0) host.gameResultTag = "1-0";
                 else if (manual.result == 1) host.gameResultTag = "0-1";
                 else if (manual.result == 2) host.gameResultTag = "1/2-1/2";
-                host.appendLog("已从剪贴板解析文字棋谱/PGN，共 " + steps.length + " 手。\n");
+                host.appendLog("已从剪贴板解析" + (ubb ? "UBB" : "文字棋谱/PGN")
+                        + "，共 " + steps.length + " 手。\n");
             }
             host.markCurrentLineAsAnalysisOnly("已粘贴外部局面或棋谱");
             host.gameEngine.notifyNewGame();

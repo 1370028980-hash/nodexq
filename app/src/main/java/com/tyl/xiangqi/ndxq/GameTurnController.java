@@ -190,14 +190,19 @@ final class GameTurnController {
 
     private void executeUndoTo(int target) {
         host.stopSearchForPositionChange();
-        host.truncateListsTo(target);
-        ArrayList<Integer> keys = new ArrayList<Integer>(host.manualVariations.keySet());
-        for (Integer key : keys) {
-            if (key != null && key >= target) host.manualVariations.remove(key);
-        }
-        keys = new ArrayList<Integer>(host.activeBranchLabels.keySet());
-        for (Integer key : keys) {
-            if (key != null && key >= target) host.activeBranchLabels.remove(key);
+        if (host.evaluationMode) {
+            // 评测悔棋只回看，不截断未来棋步；必须通过导航回到末步后才能继续。
+            host.evaluationNavigationLocked = true;
+        } else {
+            host.truncateListsTo(target);
+            ArrayList<Integer> keys = new ArrayList<Integer>(host.manualVariations.keySet());
+            for (Integer key : keys) {
+                if (key != null && key >= target) host.manualVariations.remove(key);
+            }
+            keys = new ArrayList<Integer>(host.activeBranchLabels.keySet());
+            for (Integer key : keys) {
+                if (key != null && key >= target) host.activeBranchLabels.remove(key);
+            }
         }
         host.currentPly = target;
         host.rebuildBoardToPly(target);
@@ -210,7 +215,8 @@ final class GameTurnController {
                 ? host.currentPly + 1 : -1;
         host.persistCurrentSession();
         host.appendLog("悔棋：已回退到第 " + target + " 手后的玩家回合，后续棋谱已删除。\n");
-        if (!host.selfAnalysisMode && host.boardView.isRedToMove() == host.enginePlaysRed) {
+        if (!host.selfAnalysisMode && !host.evaluationNavigationLocked
+                && host.boardView.isRedToMove() == host.enginePlaysRed) {
             host.handler.postDelayed(host::maybeAutoMove, 220L);
         }
     }

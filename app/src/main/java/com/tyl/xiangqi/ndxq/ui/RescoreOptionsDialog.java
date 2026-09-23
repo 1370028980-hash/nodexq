@@ -163,7 +163,7 @@ public final class RescoreOptionsDialog {
         panel.addView(appendScoresRow, rowParams(activity));
 
         TextView appendScoresHint = new TextView(activity);
-        appendScoresHint.setText("该评分结果将追加至每条注释的顶部。若原注释内容重要，请务必做好备份，以免后续需要逐条删除时造成不便。");
+        appendScoresHint.setText("若原注释内容重要，请务必备份。");
         appendScoresHint.setTextSize(11);
         appendScoresHint.setTextColor(Color.rgb(100, 106, 102));
         appendScoresHint.setPadding(0, 0, 0, dp(activity, 2));

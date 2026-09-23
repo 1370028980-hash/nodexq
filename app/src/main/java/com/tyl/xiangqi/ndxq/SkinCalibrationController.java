@@ -48,7 +48,7 @@ final class SkinCalibrationController {
                 ViewGroup.LayoutParams.MATCH_PARENT, activity.dp(38)));
 
         TextView status = new TextView(activity);
-        status.setText("点击黄色角点选择后可用方向键微调；也可以直接拖动角点或整体网格。");
+        status.setText("直接拖动网格/四个角点");
         status.setTextSize(12);
         status.setTextColor(UiTheme.secondaryTextOnBackground(activity));
         status.setGravity(Gravity.CENTER_VERTICAL);
@@ -167,14 +167,6 @@ final class SkinCalibrationController {
         nudgeArea.addView(stepPanel, stepPanelLp);
         content.addView(nudgeArea, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, activity.dp(90)));
-
-        TextView hint = new TextView(activity);
-        hint.setText("动态校准方法：黄色网格实时表示棋子落点。可直接拖拽四个圆形控制点；点击某个角点可选中，再点一次取消，点击另一个角点会切换选择。选中后可用方向键按设定步长微调；拖动网格内部可整体移动。");
-        hint.setTextSize(11);
-        hint.setTextColor(UiTheme.secondaryTextOnBackground(activity));
-        hint.setPadding(activity.dp(2), activity.dp(5), activity.dp(2), activity.dp(8));
-        content.addView(hint, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         page.addView(scroll, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));

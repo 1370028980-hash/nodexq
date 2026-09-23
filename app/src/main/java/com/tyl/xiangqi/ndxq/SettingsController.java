@@ -130,7 +130,7 @@ final class SettingsController {
         scroll.addView(panel);
 
         TextView hint = new TextView(host);
-        hint.setText("可自定义自选难度中的 13 档名称；“青云”保持固定名称。输入框留空会恢复该档默认名称。");
+        hint.setText("“青云”固定不变，留空则为默认名称");
         hint.setTextSize(12);
         hint.setTextColor(UiTheme.secondaryTextOnBackground(host));
         hint.setPadding(0, 0, 0, host.dp(8));

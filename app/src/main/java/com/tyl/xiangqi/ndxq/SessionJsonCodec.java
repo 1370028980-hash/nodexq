@@ -26,7 +26,9 @@ final class SessionJsonCodec {
         String normalizedBaseFen = normalizeFen(session.baseFen);
         root.put("baseFen", normalizedBaseFen.length() == 0 ? startFen : normalizedBaseFen);
         root.put("difficulty", session.difficultyIndex);
+        root.put("viewPly", session.currentPly);
         root.put("engineRed", session.enginePlaysRed);
+        root.put("evaluationNavigationLocked", session.evaluationNavigationLocked);
         root.put("sixtyArm", session.sixtyMoveDrawArmedPly);
         root.put("savedAt", System.currentTimeMillis());
         root.put("moves", stringsToJson(session.engineSteps));
@@ -61,7 +63,9 @@ final class SessionJsonCodec {
         saved.baseFen = normalizedBaseFen.length() == 0 ? startFen : normalizedBaseFen;
         saved.difficultyIndex = clamp(root.optInt("difficulty", defaultDifficulty),
                 0, Math.max(0, difficultyCount - 1));
+        saved.currentPly = root.optInt("viewPly", -1);
         saved.enginePlaysRed = root.optBoolean("engineRed", defaultEnginePlaysRed);
+        saved.evaluationNavigationLocked = root.optBoolean("evaluationNavigationLocked", false);
         saved.sixtyMoveDrawArmedPly = root.optInt("sixtyArm", -1);
         jsonToStrings(root.optJSONArray("moves"), saved.engineSteps, true);
         jsonToStrings(root.optJSONArray("readable"), saved.readableMoves, false);

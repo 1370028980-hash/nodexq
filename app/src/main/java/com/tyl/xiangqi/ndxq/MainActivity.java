@@ -319,6 +319,8 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
     private int evaluationDifficultyIndex;
     private boolean evaluationEnginePlaysRed;
     boolean evaluationSession;
+    /** 评测导航回溯锁：回到历史局面后，必须回到最新且轮到玩家才可落子。 */
+    boolean evaluationNavigationLocked;
     /** 当前普通对局是否从自选难度页进入，用于系统返回键回到对应入口。 */
     private boolean customDifficultySession;
     boolean evaluationLauncherVisible;
@@ -918,7 +920,7 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
     void randomizeCustomDifficulty() {
         selectedDifficultyIndex = CUSTOM_DIFFICULTY_INDICES[
                 secureRandom.nextInt(CUSTOM_DIFFICULTY_INDICES.length)];
-        enginePlaysRed = secureRandom.nextBoolean();
+        enginePlaysRed = EvaluationMatcher.randomRed();
         difficultyPreferences.saveCustomSelection(selectedDifficultyIndex, enginePlaysRed);
         saveLauncherPreferences();
         refreshLauncherDifficultyLabels();
@@ -989,6 +991,9 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         }
         evaluationMode = true;
         customDifficultySession = false;
+        // 自选难度页可能在评测留存期间改写共享的显示字段；恢复评测时只使用本局元数据。
+        selectedDifficultyIndex = clamp(evaluationDifficultyIndex, 0, DIFFICULTIES.length - 1);
+        enginePlaysRed = evaluationEnginePlaysRed;
         configureGameEngine();
         showGameScreen();
         try {
@@ -1668,6 +1673,7 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         ratingEligible = evaluationMode && !selfAnalysisMode;
         ratingDisqualified = false;
         ratingCounted = false;
+        evaluationNavigationLocked = false;
         drawOfferInProgress = false;
         rescoreController.reset();
         sixtyMoveDrawArmedPly = -1;
@@ -1991,7 +1997,8 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         boolean enabled = boardView.isEditMode()
                 || ((!gameOver || postGameSandbox)
                 && !isRescoring && !drawOfferInProgress
-                && humanTurn && !engineThinking && !autoMoveInProgress
+                && humanTurn && !(evaluationMode && evaluationNavigationLocked)
+                && !engineThinking && !autoMoveInProgress
                 && !computerSideThinking);
         boardView.setInputEnabled(enabled);
     }
@@ -2185,6 +2192,9 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         try {
             rebuildBoardToPly(target);
             currentPly = target;
+            if (evaluationMode) {
+                evaluationNavigationLocked = target < engineMoves.size();
+            }
             if (refreshContent && target > previousPly) {
                 playMoveSoundForCurrentPosition(boardView.isRedToMove());
             }
@@ -2211,6 +2221,10 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
                 }
             }
             if (refreshContent && analysisMode) continueManualAnalysisForCurrentPosition(20L);
+            if (refreshContent && evaluationMode && currentPly == engineMoves.size()
+                    && boardView.isRedToMove() == enginePlaysRed) {
+                handler.postDelayed(this::maybeAutoMove, 120L);
+            }
         } catch (Exception e) {
             if (refreshContent) appendLog("棋谱导航失败：" + e.getMessage() + "。\n");
         }

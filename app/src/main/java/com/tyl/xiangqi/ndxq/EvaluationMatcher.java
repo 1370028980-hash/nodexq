@@ -40,6 +40,7 @@ final class EvaluationMatcher {
         return 1d / (25d + Math.abs(opponentRating - playerRating));
     }
 
-    static boolean randomRed() { return RANDOM.nextBoolean(); }
+    /** 独立于难度匹配的二值抽样；两种执子方各占一个等概率桶。 */
+    static boolean randomRed() { return RANDOM.nextInt(2) == 0; }
     static int randomDifficulty(int count) { return count <= 0 ? 0 : RANDOM.nextInt(count); }
 }
