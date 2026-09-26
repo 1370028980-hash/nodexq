@@ -235,7 +235,7 @@ final class RescoreController {
         if (host.rescoreEngine == null) {
             host.rescoreEngine = new PikafishEngine(host, false);
             host.rescoreEngine.setVirtualEngineSlot(
-                    host.rescoreEngine.hasVirtualEngine("131") ? "131" : "");
+                    host.rescoreEngine.hasVirtualEngine("925") ? "925" : "");
             host.applyStoredManualOptions(host.rescoreEngine);
             return;
         }
@@ -244,13 +244,13 @@ final class RescoreController {
                 host.rescoreEngine.stopQuietly();
                 host.rescoreEngine = new PikafishEngine(host, false);
                 host.rescoreEngine.setVirtualEngineSlot(
-                        host.rescoreEngine.hasVirtualEngine("131") ? "131" : "");
+                        host.rescoreEngine.hasVirtualEngine("925") ? "925" : "");
                 host.applyStoredManualOptions(host.rescoreEngine);
             }
         } catch (Exception e) {
             host.rescoreEngine = new PikafishEngine(host, false);
             host.rescoreEngine.setVirtualEngineSlot(
-                    host.rescoreEngine.hasVirtualEngine("131") ? "131" : "");
+                        host.rescoreEngine.hasVirtualEngine("925") ? "925" : "");
             host.applyStoredManualOptions(host.rescoreEngine);
         }
     }

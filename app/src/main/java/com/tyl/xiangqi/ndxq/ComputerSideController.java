@@ -156,7 +156,7 @@ final class ComputerSideController {
 
     private void configureEngine() {
         if (host.manualEngine == null || enginePrepared) return;
-        host.manualEngine.setVirtualEngineSlot("131");
+        host.manualEngine.setVirtualEngineSlot("925");
         host.applyStoredManualOptions(host.manualEngine);
         enginePrepared = true;
     }

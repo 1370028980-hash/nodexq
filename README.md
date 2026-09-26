@@ -84,8 +84,8 @@
 
 | 文件名 | 对应引擎 | 说明                                               | 来源 |
 |---|---|--------------------------------------------------|---|
-| `lib131.so` | **131** | 皮卡鱼，棋力最强，用于最高难度与分析                               | <https://github.com/official-pikafish/Pikafish> |
-| `pikafish.nnue.so` | — | 131 使用的 NNUE 权重（打包时会自动改名为 `libpikafish.nnue.so`） | 随皮卡鱼一同发布 |
+| `lib925.so` | **925** | 皮卡鱼，棋力最强，用于最高难度与分析                               | <https://github.com/official-pikafish/Pikafish> |
+| `pikafish.nnue.so` | — | 925 使用的 NNUE 权重（打包时会自动改名为 `libpikafish.nnue.so`） | 随皮卡鱼一同发布 |
 | `libHCE.so` | **HCE** | 皮卡鱼传统评估版（无神经网络），用于低难度档                           | <https://github.com/skystarspython/Pikafish-HCE> |
 | `libduf.so` | **duf** | Duffish3.5，NNUE 已完整内嵌在二进制里，无需外置权重                | <https://github.com/lxsgx23/Duffish> |
 
@@ -95,7 +95,7 @@
 
 ### 3. 补齐开局库（可选）
 
-把开局库放到 `app/src/main/assets/books/rp/book.obk`。
+把开局库放到 `app/src/main/assets/books/rp/book.obk`；自选难度的随机平衡开局书放到 `app/src/main/assets/balance.txt`，每行一个 FEN。
 
 未提供时应用会跳过开局库加载，**不影响编译、引擎启动和基本对弈**。
 
@@ -124,7 +124,8 @@ app/src/main/
 │   ├── drawable-nodpi/              内置默认皮肤（board + 14 张棋子图）
 │   ├── raw/                         落子与将军音效
 │   └── values/                      字符串与样式
-├── assets/books/rp/                 开局库位置
+├── assets/books/rp/                 对弈开局库位置
+├── assets/balance.txt               自选难度随机平衡开局 FEN 列表
 └── pikafish/arm64-v8a/              引擎库位置（本仓库不包含）
 ```
 
@@ -138,7 +139,7 @@ app/src/main/
 
 | 组件 | 许可 | 来源 |
 |---|---|---|
-| **Pikafish**（皮卡鱼，131 引擎） | GNU GPL v3 | <https://github.com/official-pikafish/Pikafish> |
+| **Pikafish**（皮卡鱼，925 引擎） | GNU GPL v3 | <https://github.com/official-pikafish/Pikafish> |
 | **Pikafish-HCE**（HCE 引擎） | GNU GPL v3 | <https://github.com/skystarspython/Pikafish-HCE> |
 | Pikafish 的 NNUE 权重文件 | 另有单独使用条款 | 随皮卡鱼一同发布；限非商用并附有禁用软件名单，使用前请自行确认 |
 | **Duffish**（duf 引擎） | 请向其作者确认 | <https://github.com/lxsgx23/Duffish> |

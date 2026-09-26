@@ -47,6 +47,7 @@ public final class V68SituationChartView extends View {
     private int totalMoves;
     private int currentPly;
     private int endgameRound = -1;
+    private int openingRounds = 10;
     private List<Integer> errorPlies = Collections.emptyList();
     private Listener listener;
 
@@ -100,7 +101,7 @@ public final class V68SituationChartView extends View {
 
     public void setData(List<Integer> scores, List<Integer> matePlies,
                         int initialScoreRed, boolean initialRedToMove,
-                        int totalMoves, int currentPly, int endgameRound,
+                        int totalMoves, int currentPly, int openingRounds, int endgameRound,
                         List<Integer> errorPlies) {
         this.scores = scores == null
                 ? Collections.<Integer>emptyList() : new ArrayList<Integer>(scores);
@@ -110,6 +111,7 @@ public final class V68SituationChartView extends View {
         this.initialRedToMove = initialRedToMove;
         this.totalMoves = Math.max(0, totalMoves);
         this.currentPly = Math.max(0, Math.min(this.totalMoves, currentPly));
+        this.openingRounds = Math.max(0, openingRounds);
         this.endgameRound = endgameRound;
         this.errorPlies = errorPlies == null
                 ? Collections.<Integer>emptyList() : new ArrayList<Integer>(errorPlies);
@@ -157,9 +159,9 @@ public final class V68SituationChartView extends View {
         drawInsideLeftText(canvas, "-" + MATE_LIMIT, left + dp(3), bottom - dp(3));
 
         int totalRounds = Math.max(1, (totalMoves + 1) / 2);
-        if (totalRounds >= 10) {
+        if (openingRounds > 0 && totalRounds >= openingRounds) {
             drawStageLine(canvas, left, top, bottom, plotWidth,
-                    10, totalRounds, "中局（10）", Color.rgb(0, 145, 110), 0);
+                    openingRounds, totalRounds, "中局（" + openingRounds + "）", Color.rgb(0, 145, 110), 0);
         }
         if (endgameRound >= 0 && endgameRound <= totalRounds) {
             drawStageLine(canvas, left, top, bottom, plotWidth,
@@ -515,8 +517,8 @@ public final class V68SituationChartView extends View {
         for (float y : new float[]{top, upper3700, upper1700, centerY, lower1700, lower3700, bottom}) {
             if (y >= expanded.top && y <= expanded.bottom) hits++;
         }
-        if (totalRounds >= 10) {
-            float x = left + (10f / Math.max(1f, totalRounds)) * plotWidth;
+        if (openingRounds > 0 && totalRounds >= openingRounds) {
+            float x = left + (openingRounds / Math.max(1f, totalRounds)) * plotWidth;
             if (x >= expanded.left && x <= expanded.right) hits++;
         }
         if (endgameRound >= 0 && endgameRound <= totalRounds) {

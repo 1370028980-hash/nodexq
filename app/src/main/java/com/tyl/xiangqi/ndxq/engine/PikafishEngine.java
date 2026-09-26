@@ -232,7 +232,7 @@ public class PikafishEngine {
     private static final String STATIC_EXEC_LOADER = "libndxq-static-exec.so";
     private static final String VIRTUAL_ENGINE_HCE = "HCE";
     private static final String VIRTUAL_ENGINE_DUF = "duf";
-    private static final String VIRTUAL_ENGINE_131 = "131";
+    private static final String VIRTUAL_ENGINE_925 = "925";
 
     private final Context context;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -370,7 +370,7 @@ public class PikafishEngine {
 
     /**
      * 选择专用人机版的内置引擎虚位置。引擎文件应位于 nativeLibraryDir：
-     * HCE -> libHCE.so，duf -> libduf.so，131 -> lib131.so。
+     * HCE -> libHCE.so，duf -> libduf.so，925 -> lib925.so。
      * 该选择只保存在当前实例内，不影响其他 PikafishEngine 实例。
      */
     public synchronized void setVirtualEngineSlot(String slot) {
@@ -516,7 +516,7 @@ public class PikafishEngine {
                     + "；NNUE=" + (nnue.exists() ? "已发现" : "未发现")
                     + "；目录=" + dir.getAbsolutePath();
         }
-        return "未发现可用引擎。请把 V10.0 所需的 libHCE.so、libduf.so、lib131.so "
+        return "未发现可用引擎。请把 V10.0 所需的 libHCE.so、libduf.so、lib925.so "
                 + "放入 app/src/main/pikafish/arm64-v8a/ 后重新编译。";
     }
 
@@ -2308,7 +2308,7 @@ public class PikafishEngine {
             send(cmd);
             lastSentEvalFileCmd = cmd;
         }
-        // 会话参数最后发送，覆盖持久参数，但不写回设置。人机难度和"131 手动工具"由不同实例维护。
+        // 会话参数最后发送，覆盖持久参数，但不写回设置。人机难度和"925 手动工具"由不同实例维护。
         for (Map.Entry<String, String> e : new ArrayList<Map.Entry<String, String>>(sessionOptions.entrySet())) {
             String actualName = findParsedOptionName(e.getKey());
             if (actualName != null) {
@@ -3038,14 +3038,14 @@ public class PikafishEngine {
         String value = slot.trim();
         if (VIRTUAL_ENGINE_HCE.equalsIgnoreCase(value)) return VIRTUAL_ENGINE_HCE;
         if (VIRTUAL_ENGINE_DUF.equalsIgnoreCase(value)) return VIRTUAL_ENGINE_DUF;
-        if (VIRTUAL_ENGINE_131.equalsIgnoreCase(value)) return VIRTUAL_ENGINE_131;
+        if (VIRTUAL_ENGINE_925.equalsIgnoreCase(value)) return VIRTUAL_ENGINE_925;
         return "";
     }
 
     private static String virtualEngineFileName(String slot) {
         if (VIRTUAL_ENGINE_HCE.equals(slot)) return "libHCE.so";
         if (VIRTUAL_ENGINE_DUF.equals(slot)) return "libduf.so";
-        if (VIRTUAL_ENGINE_131.equals(slot)) return "lib131.so";
+        if (VIRTUAL_ENGINE_925.equals(slot)) return "lib925.so";
         return "";
     }
 

@@ -12,8 +12,8 @@ android {
         applicationId 'com.tyl.xiangqi.nodechess'
         minSdk 23
         targetSdk 35
-        versionCode 60
-        versionName '20.7'
+        versionCode 61
+        versionName '20.8'
     }
 
     packagingOptions {
@@ -44,7 +44,7 @@ tasks.register('nativeLibsToJar', Jar) {
         exclude '**/xiangqi-agg20260512.nnue.so'
         exclude '**/libxiangqi-agg20260512.nnue.so'
     }) {
-        // pikafish.nnue.so 仍供 131 等 Pikafish 系引擎使用；打包时改成
+        // pikafish.nnue.so 仍供 925 等 Pikafish 系引擎使用；打包时改成
         // Android 可稳定提取的 libpikafish.nnue.so。
         rename { String fileName ->
             fileName.equalsIgnoreCase('pikafish.nnue.so') ? 'libpikafish.nnue.so' : fileName

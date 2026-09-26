@@ -78,7 +78,7 @@ final class EngineSettingsController {
         scroll.addView(panel);
 
         TextView scopeNote = new TextView(host);
-        scopeNote.setText("此设置适用于局面分析、重新打分，以及引擎执红/执黑（与放大镜共用同一个 131 引擎进程）");
+        scopeNote.setText("此设置适用于局面分析、重新打分，以及引擎执红/执黑（与放大镜共用同一个 925 引擎进程）");
         scopeNote.setTextSize(12);
         scopeNote.setTextColor(Color.rgb(104, 110, 106));
         scopeNote.setGravity(Gravity.CENTER_VERTICAL);

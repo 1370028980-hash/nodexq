@@ -264,6 +264,16 @@ final class LauncherController {
         root.addView(difficulty, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, activity.dp(120)));
 
+        Button openingMode = launcherButton(activity, activity.customOpeningButtonText());
+        LinearLayout.LayoutParams openingModeLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, activity.dp(MainActivity.LAUNCHER_ACTION_HEIGHT_DP));
+        openingModeLp.topMargin = activity.dp(10);
+        root.addView(openingMode, openingModeLp);
+        openingMode.setOnClickListener(v -> {
+            activity.toggleCustomOpeningMode();
+            openingMode.setText(activity.customOpeningButtonText());
+        });
+
         root.addView(buildLauncherStatsRow(activity), new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, activity.dp(42)));
         activity.updateLauncherStatsText();

@@ -29,7 +29,7 @@ final class DifficultyProfiles {
                 DifficultyProfile.nodes("业余顶尖", "duf", 10, 2, 40000),
                 DifficultyProfile.nodes("特级大师", "duf", 10, 2, 120000),
                 DifficultyProfile.nodes("天下无敌", "duf", 5, 2, 1600000),
-                DifficultyProfile.nodes("青云", "131", 3, 4, 4500000)
+                DifficultyProfile.nodes("青云", "925", 3, 4, 4500000)
         };
     }
 }

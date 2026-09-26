@@ -67,6 +67,7 @@ final class GameScreenController {
         host.boardView.setBoardScalePercent(host.boardScalePercent);
         host.boardView.setShowArrow(host.showEngineArrows);
         host.boardView.newGame();
+        host.boardView.setBoardFromFen(host.baseFen);
         host.boardView.setReversed(host.enginePlaysRed);
         root.addView(host.boardView, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));

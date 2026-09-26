@@ -28,6 +28,7 @@ final class GameReportDialogController {
         GameReportCalculator.Report buildReport(double softMinTau);
         List<String> readableMoves();
         boolean redToMoveAtRoot();
+        boolean startsFromMiddlegame();
         void navigateToPly(int target);
         void refreshReportButton(GameReportCalculator.Report report);
     }
@@ -182,7 +183,8 @@ final class GameReportDialogController {
     }
 
     private void bindDetail(TextView detail, GameReportCalculator.SideReport side, boolean redSide) {
-        String text = "开局  " + formatScore(side.opening) + "\n中局  " + formatScore(side.middlegame)
+        String opening = source.startsFromMiddlegame() ? "开局  跳过" : "开局  " + formatScore(side.opening);
+        String text = opening + "\n中局  " + formatScore(side.middlegame)
                 + "\n残局  " + formatScore(side.endgame) + "\n错误招法  " + side.errorCount;
         SpannableStringBuilder content = new SpannableStringBuilder(text);
         int start = text.lastIndexOf("错误招法");
@@ -323,7 +325,9 @@ final class GameReportDialogController {
     }
 
     private String reportHint() {
-        return "百分制招法质量报告 · 阶段 SoftMin τ=" + softMinTau + " · 错招阈值 L > 1000";
+        String phaseHint = source.startsFromMiddlegame() ? " · 随机平衡开局按中局起算" : "";
+        return "百分制招法质量报告 · 阶段 SoftMin τ=" + softMinTau
+                + " · 错招阈值 L > 1000" + phaseHint;
     }
 
     private static String formatScore(double value) {

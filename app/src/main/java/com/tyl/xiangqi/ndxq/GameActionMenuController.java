@@ -75,7 +75,7 @@ final class GameActionMenuController {
             return;
         }
 
-        LinearLayout[] rows = new LinearLayout[host.selfAnalysisMode ? 8 : 7];
+        LinearLayout[] rows = new LinearLayout[8];
         for (int i = 0; i < rows.length; i++) {
             rows[i] = new LinearLayout(host);
             rows[i].setOrientation(LinearLayout.HORIZONTAL);
@@ -148,14 +148,13 @@ final class GameActionMenuController {
             host.saveLauncherPreferences();
             updateArrowModeButtonText(arrowBtn);
         });
-        if (host.selfAnalysisMode) {
-            rows[7].addView(arrowBtn, menuActionLp());
-            View arrowSpacer = new View(host);
-            arrowSpacer.setEnabled(false);
-            rows[7].addView(arrowSpacer, menuActionLp());
-        } else {
-            rows[6].addView(arrowBtn, menuActionLp());
-        }
+        Button playbackBtn = menuStayButton(host.playbackSpeedLabel());
+        playbackBtn.setOnClickListener(v -> {
+            dialog.dismiss();
+            host.showPlaybackSpeedDialog();
+        });
+        rows[7].addView(arrowBtn, menuActionLp());
+        rows[7].addView(playbackBtn, menuActionLp());
 
         dialog.setView(panel);
         dialog.setOnDismissListener(ignored -> {

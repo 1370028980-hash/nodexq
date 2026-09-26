@@ -37,6 +37,7 @@ final class SituationPanelController {
         final boolean redToMoveAtRoot;
         final int totalPly;
         final int currentPly;
+        final int openingRounds;
         final int endgameRound;
         final List<Integer> errorPlies;
         final String rescoreProgressText;
@@ -44,7 +45,7 @@ final class SituationPanelController {
         Data(boolean rescoring, boolean correctionEnabled, boolean reportComplete,
              int redAdvantageColor, int blackAdvantageColor,
              List<Integer> scores, List<Integer> matePlies, int initialScoreRed,
-             boolean redToMoveAtRoot, int totalPly, int currentPly, int endgameRound,
+             boolean redToMoveAtRoot, int totalPly, int currentPly, int openingRounds, int endgameRound,
              List<Integer> errorPlies, String rescoreProgressText) {
             this.rescoring = rescoring;
             this.correctionEnabled = correctionEnabled;
@@ -57,6 +58,7 @@ final class SituationPanelController {
             this.redToMoveAtRoot = redToMoveAtRoot;
             this.totalPly = totalPly;
             this.currentPly = currentPly;
+            this.openingRounds = Math.max(0, openingRounds);
             this.endgameRound = endgameRound;
             this.errorPlies = errorPlies == null ? Collections.<Integer>emptyList() : errorPlies;
             this.rescoreProgressText = rescoreProgressText == null ? "" : rescoreProgressText;
@@ -176,6 +178,6 @@ final class SituationPanelController {
         chart.setAdvantageColors(data.redAdvantageColor, data.blackAdvantageColor);
         chart.setData(data.scores, data.matePlies, data.initialScoreRed,
                 data.redToMoveAtRoot, data.totalPly, data.currentPly,
-                data.endgameRound, data.errorPlies);
+                data.openingRounds, data.endgameRound, data.errorPlies);
     }
 }

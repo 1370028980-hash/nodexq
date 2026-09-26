@@ -31,6 +31,23 @@ public final class GameReportCalculator {
                                    int totalMoves,
                                    int endgameRound,
                                    double softMinTau) {
+        return calculate(initialScoreRed, initialMatePly, initialScoreKnown, initialRedToMove,
+                scoresRed, matePlies, scoreKnown, totalMoves, endgameRound, 10, softMinTau);
+    }
+
+    /**
+     * 计算带起始阶段配置的报告；openingRounds=0 表示输入局面已经处于中局。
+     */
+    public static Report calculate(int initialScoreRed, int initialMatePly,
+                                   boolean initialScoreKnown,
+                                   boolean initialRedToMove,
+                                   List<Integer> scoresRed,
+                                   List<Integer> matePlies,
+                                   List<Boolean> scoreKnown,
+                                   int totalMoves,
+                                   int endgameRound,
+                                   int openingRounds,
+                                   double softMinTau) {
         int moves = Math.max(0, totalMoves);
         if (moves <= 0 || !initialScoreKnown
                 || scoresRed == null || matePlies == null || scoreKnown == null
@@ -57,7 +74,8 @@ public final class GameReportCalculator {
             MoveQuality quality = scoreMove(beforeScoreRed, beforeMatePly,
                     afterScoreRed, afterMatePly, redMover);
             int round = i / 2 + 1;
-            int phase = round <= 10 ? 0 : (round >= effectiveEndgameRound ? 2 : 1);
+            int phase = round <= Math.max(0, openingRounds) ? 0
+                    : (round >= effectiveEndgameRound ? 2 : 1);
             SideAccumulator side = redMover ? red : black;
             // 高分饱和区只影响“是否算错招”，不影响单步分和阶段 SoftMin 聚合。
             side.add(phase, quality.score);

@@ -287,6 +287,10 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
                     return XiangqiRules.redToMoveFromFen(baseFen);
                 }
 
+                @Override public boolean startsFromMiddlegame() {
+                    return MainActivity.this.isRandomBalancedOpeningSession();
+                }
+
                 @Override public void navigateToPly(int target) {
                     MainActivity.this.navigateToPly(target);
                 }
@@ -306,7 +310,7 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
     PikafishEngine manualEngine;
     PikafishEngine drawEngine;
     PikafishEngine rescoreEngine;
-    /** 对弈局势图专用：固定虚拟位 131、4 线程、每局面 100ms，并使用 ComputerRule。 */
+    /** 对弈局势图专用：固定虚拟位 925、4 线程、每局面 100ms，并使用 ComputerRule。 */
     PikafishEngine situationEngine;
     ObkBook openingBook;
     boolean openingBookReady;
@@ -326,6 +330,7 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
     boolean evaluationLauncherVisible;
     boolean evaluationRatingHistoryVisible;
     boolean customDifficultyLauncherVisible;
+    private boolean randomOpeningSelectionPending;
     Button evaluationDrawToolbarButton;
     Button evaluationResignToolbarButton;
     final SecureRandom secureRandom = new SecureRandom();
@@ -341,6 +346,7 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
     boolean computerSideThinking;
     int computerMoveGeneration;
     PikafishEngine.SearchLimit manualPlayLimit = PikafishEngine.SearchLimit.movetime(100);
+    int playbackDelayMs = PlaybackController.defaultDelayMs();
     private boolean manualPlayLimitConfigured;
     TextView launcherRatingText;
     boolean enginePlaysRed;
@@ -380,6 +386,9 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
             new ManualEditorController(this);
     private final ManualNavigationController manualNavigationController =
             new ManualNavigationController(this);
+    private final OpeningPositionController openingPositionController =
+            new OpeningPositionController(this);
+    private final PlaybackController playbackController = new PlaybackController(this);
     private final EngineSettingsController engineSettingsController =
             new EngineSettingsController(this);
     private final SettingsController settingsController =
@@ -560,6 +569,8 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
 
         appendLog("节点象棋 " + VERSION_NAME + " 启动。\n");
         showLauncherScreen();
+        // 随机开局书约 6MB；在后台提前读入，避免第一次进入棋盘时阻塞 UI 线程。
+        openingPositionController.preloadIfEnabled();
         // V19.1：在首页展示期间后台预热当前皮肤，进入棋盘时直接复用已解码 Bitmap。
         skinRuntimeController.preloadCurrentSkin();
         handler.postDelayed(this::prepareNodeStorageOnFirstLaunch, 260L);
@@ -680,6 +691,8 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         }
         manualPlayLimit = PikafishEngine.SearchLimit.combined(
                 savedManualDepth, savedManualNodes, savedManualMs);
+        playbackDelayMs = PlaybackController.normalizeDelayMs(
+                sp.getInt("manual_playback_delay_ms", PlaybackController.defaultDelayMs()));
         if (combinedManualEngineMode && selectedGameTab == 1) selectedGameTab = 0;
     }
 
@@ -708,6 +721,7 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
                 .putInt("manual_play_depth", manualPlayLimit.depth)
                 .putInt("manual_play_nodes", manualPlayLimit.nodes)
                 .putBoolean("manual_play_limit_configured", manualPlayLimitConfigured)
+                .putInt("manual_playback_delay_ms", playbackDelayMs)
                 .apply();
     }
 
@@ -720,10 +734,10 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
     }
 
     private void configureToolEngines() {
-        // 优先使用专用 131 槽；源码包未内置 lib131.so 时，自动回退到“引擎设置”
+        // 优先使用专用 925 槽；源码包未内置 lib925.so 时，自动回退到“引擎设置”
         // 中当前选择的外部/通用引擎，避免分析、重新打分一直停在等待状态。
-        boolean has131 = manualEngine.hasVirtualEngine("131");
-        String toolSlot = has131 ? "131" : "";
+        boolean has925 = manualEngine.hasVirtualEngine("925");
+        String toolSlot = has925 ? "925" : "";
         manualEngine.setVirtualEngineSlot(toolSlot);
         rescoreEngine.setVirtualEngineSlot(toolSlot);
         drawEngine.setVirtualEngineSlot(toolSlot);
@@ -735,16 +749,16 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         drawEngine.setSessionOption("MultiPV", "1");
         drawEngine.setSessionOption("UCI_ShowWDL", "true");
 
-        // V18.5 修正：局势图评分继续严格固定虚拟位 131，只额外使用 ComputerRule；
+        // V20.8 修正：局势图评分继续严格固定虚拟位 925，只额外使用 ComputerRule；
         // 线程数、MultiPV、WDL 及其他用途的引擎选择均保持原逻辑不变。
-        situationEngine.setVirtualEngineSlot("131");
+        situationEngine.setVirtualEngineSlot("925");
         situationEngine.clearSessionOptions();
         situationEngine.setSessionOption("Threads", "4");
         situationEngine.setSessionOption("MultiPV", "1");
         situationEngine.setSessionOption("UCI_ShowWDL", "true");
         situationEngine.setSessionOption("Repetition Rule", "ComputerRule");
-        if (!has131) {
-            appendLog("未发现 lib131.so：分析、重新打分和提和已自动改用当前选择的引擎。\n");
+        if (!has925) {
+            appendLog("未发现 lib925.so：分析、重新打分和提和已自动改用当前选择的引擎。\n");
         }
     }
 
@@ -909,6 +923,60 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         difficultyPreferences.saveCustomSelection(selectedDifficultyIndex, enginePlaysRed);
         saveLauncherPreferences();
         updateLauncherStatsText();
+    }
+
+    boolean isRandomBalancedOpeningEnabled() {
+        return openingPositionController.isRandomBalancedEnabled();
+    }
+
+    String customOpeningButtonText() {
+        return "当前开局：" + (isRandomBalancedOpeningEnabled()
+                ? "随机平衡开局" : "正常开局");
+    }
+
+    void toggleCustomOpeningMode() {
+        boolean enabled = !isRandomBalancedOpeningEnabled();
+        openingPositionController.setRandomBalancedEnabled(enabled);
+        if (enabled) openingPositionController.preload();
+    }
+
+    boolean isRandomBalancedOpeningSession() {
+        return customDifficultySession && isRandomBalancedOpeningEnabled()
+                && !START_FEN.equals(normalizeFen(baseFen));
+    }
+
+    int playbackDelayMs() {
+        return playbackDelayMs;
+    }
+
+    String playbackSpeedLabel() {
+        return String.format(Locale.US, "棋谱播放速度：%.1f秒", playbackDelayMs / 1000d);
+    }
+
+    void showPlaybackSpeedDialog() {
+        final EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+                | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        input.setText(String.format(Locale.US, "%.1f", playbackDelayMs / 1000d));
+        input.setSelectAllOnFocus(true);
+        new AlertDialog.Builder(this)
+                .setTitle("棋谱播放速度")
+                .setMessage("单位：秒，支持一位小数")
+                .setView(input)
+                .setPositiveButton("保存", (dialog, which) -> {
+                    try {
+                        double seconds = Double.parseDouble(input.getText().toString().trim());
+                        if (seconds < 0.1d || seconds > 60d) throw new NumberFormatException();
+                        playbackDelayMs = PlaybackController.normalizeDelayMs(
+                                (int) Math.round(seconds * 1000d));
+                        saveLauncherPreferences();
+                    } catch (NumberFormatException e) {
+                        Toast.makeText(this, "请输入 0.1 至 60.0 秒", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
     }
 
     void setCustomEnginePlaysRed(boolean red) {
@@ -1489,12 +1557,27 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
     }
 
     void startNewGame() {
+        if (customDifficultySession && isRandomBalancedOpeningEnabled()) {
+            if (randomOpeningSelectionPending) return;
+            randomOpeningSelectionPending = true;
+            openingPositionController.chooseStartingFenAsync(START_FEN, fen -> {
+                randomOpeningSelectionPending = false;
+                if (!customDifficultySession || evaluationMode || selfAnalysisMode) return;
+                startNewGameWithFen(fen);
+            });
+            return;
+        }
+        startNewGameWithFen(START_FEN);
+    }
+
+    private void startNewGameWithFen(String startingFen) {
         // 同一对弈页面点“新建”时复用现有 View，避免整页销毁/重建与皮肤重新加载。
         boolean reuseGameScreen = gameScreenVisible && boardView != null && !selfAnalysisMode;
         clearSavedSession(false);
         selfAnalysisMode = false;
         saveLauncherPreferences();
         resetGameState();
+        baseFen = normalizeFen(startingFen);
         configureGameEngine();
         // 新建对局意味着全新局面，不再沿用停止分析时冻结的旧引擎快照。
         clearFrozenAnalysisDisplay();
@@ -1547,6 +1630,7 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
             if (editModeTabs != null) editModeTabs.setVisibility(View.VISIBLE);
         }
         boardView.newGame();
+        boardView.setBoardFromFen(baseFen);
         boardView.setReversed(enginePlaysRed);
         boardView.setShowCoordinate(false);
         boardView.setShowArrow(showEngineArrows);
@@ -1704,7 +1788,7 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         }
         updateQingyunDrawRule();
         // V16.1：duf 的当前 libduf.so 已内嵌完整 NNUE，不设置 EvalFile。
-        // 131/HCE 及其他引擎仍由 PikafishEngine 按各自规则处理网络文件。
+        // 925/HCE 及其他引擎仍由 PikafishEngine 按各自规则处理网络文件。
     }
 
     void updateQingyunDrawRule() {
@@ -1731,6 +1815,14 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
     }
     void showGameActionMenu() {
         gameActionMenuController.show();
+    }
+
+    void startPlayback() {
+        playbackController.start();
+    }
+
+    void stopPlayback() {
+        playbackController.stop();
     }
 
     /** 对弈模式临时推演：独立棋盘、独立走法列表，绝不写入正式对局字段。 */
@@ -2147,7 +2239,8 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
                 situationRedAdvantageColor, situationBlackAdvantageColor,
                 redPerspectiveScores, scoreMatePlies, initialScoreRed,
                 XiangqiRules.redToMoveFromFen(baseFen), engineMoves.size(), currentPly,
-                endgameRound, report != null && report.complete
+                isRandomBalancedOpeningSession() ? 0 : 10, endgameRound,
+                report != null && report.complete
                         ? report.errorPlies : Collections.<Integer>emptyList(),
                 currentRescoreProgressText());
     }
@@ -2164,7 +2257,8 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         return GameReportCalculator.calculate(initialScoreRed, initialMatePly, initialScoreKnown,
                 XiangqiRules.redToMoveFromFen(baseFen),
                 redPerspectiveScores, scoreMatePlies, scoreKnown,
-                engineMoves.size(), endgameRound, softMinTau);
+                engineMoves.size(), endgameRound,
+                isRandomBalancedOpeningSession() ? 0 : 10, softMinTau);
     }
 
     private void showGameReport() {
@@ -3033,6 +3127,7 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
     }
 
     private void stopAllEngineWork() {
+        playbackController.stop();
         operationGeneration++;
         manualAnalysisLaunchGeneration++;
         drawGeneration++;
@@ -3902,6 +3997,7 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         handler.removeCallbacksAndMessages(null);
         manualAnalysisStarter.shutdownNow();
         reviewRefreshStarter.shutdownNow();
+        openingPositionController.shutdown();
         skinRuntimeController.shutdown();
         dismissDrawAnalysisDialog();
         gameReportController.dismiss();
