@@ -8,6 +8,10 @@ android {
         buildConfig true
     }
 
+    androidResources {
+        noCompress += ['txt']
+    }
+
     defaultConfig {
         applicationId 'com.tyl.xiangqi.nodechess'
         minSdk 23

@@ -1,12 +1,15 @@
 package com.tyl.xiangqi.ndxq;
 
 import android.content.Context;
+import android.content.res.AssetFileDescriptor;
 import android.os.Handler;
 import android.os.Looper;
 
 import com.tyl.xiangqi.ndxq.core.XiangqiRules;
 
 import java.io.BufferedReader;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -31,6 +34,8 @@ final class OpeningPositionController {
     private volatile List<String> cachedPositions;
     private volatile boolean shutdown;
     private volatile boolean loadScheduled;
+    private volatile boolean assetRandomAccessReady;
+    private volatile long assetLength;
 
     OpeningPositionController(MainActivity host) {
         // MainActivity 的字段初始化发生在 attachBaseContext() 之前；这里只保存引用，
@@ -53,26 +58,33 @@ final class OpeningPositionController {
     }
 
     void preload() {
-        if (cachedPositions != null || shutdown || loader.isShutdown()) return;
+        if (isReady() || shutdown || loader.isShutdown()) return;
         synchronized (this) {
-            if (cachedPositions != null || shutdown || loader.isShutdown() || loadScheduled) return;
+            if (isReady() || shutdown || loader.isShutdown() || loadScheduled) return;
             loadScheduled = true;
         }
         try {
-            loader.execute(this::loadPositions);
+            loader.execute(() -> {
+                try {
+                    if (!prepareRandomAccess()) loadPositions();
+                } finally {
+                    loadScheduled = false;
+                }
+            });
         } catch (RuntimeException ignored) {
             loadScheduled = false;
         }
     }
 
     boolean isReady() {
-        return cachedPositions != null;
+        return assetRandomAccessReady || cachedPositions != null;
     }
 
     void chooseStartingFenAsync(String normalFen, Callback callback) {
         if (callback == null || shutdown || loader.isShutdown()) return;
         loader.execute(() -> {
-            String selected = chooseValidStartingFen(loadPositions(), normalFen);
+            if (!assetRandomAccessReady) prepareRandomAccess();
+            String selected = chooseStartingFen(normalFen);
             if (shutdown) return;
             mainHandler.post(() -> {
                 if (!shutdown) callback.onSelected(selected);
@@ -86,16 +98,83 @@ final class OpeningPositionController {
         loader.shutdownNow();
     }
 
+    private String chooseStartingFen(String normalFen) {
+        if (assetRandomAccessReady) {
+            for (int i = 0; i < 16; i++) {
+                String fen = readRandomFen();
+                if (isValidFen(fen)) return fen;
+            }
+            // Fall back to one full scan only when random offsets miss valid lines.
+        }
+        return chooseValidStartingFen(loadPositions(), normalFen);
+    }
+
+    private boolean prepareRandomAccess() {
+        if (assetRandomAccessReady) return true;
+        try (AssetFileDescriptor descriptor = host.getAssets().openFd(ASSET_NAME)) {
+            long length = descriptor.getLength();
+            if (length <= 0L) return false;
+            assetLength = length;
+            assetRandomAccessReady = true;
+            return true;
+        } catch (IOException | RuntimeException ignored) {
+            // Compressed or legacy assets use the full-scan fallback.
+            return false;
+        }
+    }
+
+    private String readRandomFen() {
+        AssetFileDescriptor descriptor = null;
+        FileInputStream input = null;
+        try {
+            descriptor = host.getAssets().openFd(ASSET_NAME);
+            long length = assetLength > 0L ? assetLength : descriptor.getLength();
+            if (length <= 0L) return null;
+            long offset = nextRandomOffset(length);
+            input = new FileInputStream(descriptor.getFileDescriptor());
+            input.getChannel().position(descriptor.getStartOffset() + offset);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(
+                    input, StandardCharsets.UTF_8));
+            if (offset > 0L) reader.readLine();
+            for (int i = 0; i < 8; i++) {
+                String line = reader.readLine();
+                if (line == null) return null;
+                String fen = line.trim();
+                if (!fen.isEmpty() && !fen.startsWith("#")) return fen;
+            }
+        } catch (IOException | RuntimeException ignored) {
+            return null;
+        } finally {
+            if (input != null) {
+                try { input.close(); } catch (IOException ignored) {}
+            }
+            if (descriptor != null) {
+                try { descriptor.close(); } catch (IOException ignored) {}
+            }
+        }
+        return null;
+    }
+
+    private long nextRandomOffset(long bound) {
+        return (random.nextLong() & Long.MAX_VALUE) % bound;
+    }
+
+    private boolean isValidFen(String fen) {
+        if (fen == null || fen.isEmpty()) return false;
+        try {
+            XiangqiRules.fromFen(fen);
+            return true;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
     private String chooseValidStartingFen(List<String> positions, String normalFen) {
         if (positions == null || positions.isEmpty()) return normalFen;
         int attempts = Math.min(32, positions.size());
         for (int i = 0; i < attempts; i++) {
             String fen = positions.get(random.nextInt(positions.size()));
-            try {
-                XiangqiRules.fromFen(fen);
-                return fen;
-            } catch (RuntimeException ignored) {
-            }
+            if (isValidFen(fen)) return fen;
         }
         return normalFen;
     }
