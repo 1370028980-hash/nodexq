@@ -5,8 +5,6 @@ import android.content.Context;
 import android.graphics.Color;
 import android.text.InputType;
 import android.view.Gravity;
-import android.view.GestureDetector;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -38,9 +36,11 @@ final class ManualNavigationController {
         bar.addView(navButton("←", enabled && host.currentPly > 0,
                 v -> navigateWithFollow(host.currentPly - 1)), squareNavLp());
         boolean nextEnabled = enabled && host.currentPly < host.engineMoves.size();
-        TextView next = navButton("→", nextEnabled, null);
-        installNavigationGesture(next, nextEnabled, host.currentPly + 1);
-        bar.addView(next, squareNavLp());
+        TextView play = navButton("▶", nextEnabled, v -> host.startPlayback());
+        play.setTextColor(nextEnabled ? Color.BLACK : Color.rgb(145, 150, 147));
+        bar.addView(play, squareNavLp());
+        bar.addView(navButton("→", nextEnabled,
+                v -> navigateWithFollow(host.currentPly + 1)), squareNavLp());
         bar.addView(navButton("▶|", enabled && host.currentPly < host.engineMoves.size(),
                 v -> navigateWithFollow(host.engineMoves.size())), squareNavLp());
         return bar;
@@ -62,27 +62,6 @@ final class ManualNavigationController {
         host.stopPlayback();
         host.manualScrollToCurrentPly = true;
         host.navigateToPly(target);
-    }
-
-    private void installNavigationGesture(final TextView button, final boolean enabled,
-                                          final int target) {
-        GestureDetector detector = new GestureDetector(host,
-                new GestureDetector.SimpleOnGestureListener() {
-                    @Override public boolean onDown(MotionEvent event) {
-                        return enabled;
-                    }
-
-                    @Override public boolean onSingleTapConfirmed(MotionEvent event) {
-                        if (enabled) navigateWithFollow(target);
-                        return enabled;
-                    }
-
-                    @Override public boolean onDoubleTap(MotionEvent event) {
-                        if (enabled && target == host.currentPly + 1) host.startPlayback();
-                        return enabled;
-                    }
-                });
-        button.setOnTouchListener((view, event) -> detector.onTouchEvent(event));
     }
 
     void scrollRowIntoView(View row, View listRoot) {

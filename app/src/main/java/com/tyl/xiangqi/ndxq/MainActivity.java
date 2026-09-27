@@ -929,6 +929,10 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         return openingPositionController.isRandomBalancedEnabled();
     }
 
+    boolean isRandomBalancedOpeningReady() {
+        return openingPositionController.isReady();
+    }
+
     String customOpeningButtonText() {
         return "当前开局：" + (isRandomBalancedOpeningEnabled()
                 ? "随机平衡开局" : "正常开局");

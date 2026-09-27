@@ -269,10 +269,6 @@ final class LauncherController {
                 ViewGroup.LayoutParams.MATCH_PARENT, activity.dp(MainActivity.LAUNCHER_ACTION_HEIGHT_DP));
         openingModeLp.topMargin = activity.dp(10);
         root.addView(openingMode, openingModeLp);
-        openingMode.setOnClickListener(v -> {
-            activity.toggleCustomOpeningMode();
-            openingMode.setText(activity.customOpeningButtonText());
-        });
 
         root.addView(buildLauncherStatsRow(activity), new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, activity.dp(42)));
@@ -284,6 +280,23 @@ final class LauncherController {
         startLp.topMargin = activity.dp(10);
         root.addView(start, startLp);
         start.setOnClickListener(v -> activity.handleLauncherStartGame());
+        final Runnable[] refreshOpeningState = new Runnable[1];
+        refreshOpeningState[0] = () -> {
+            boolean waiting = activity.isRandomBalancedOpeningEnabled()
+                    && !activity.isRandomBalancedOpeningReady();
+            start.setEnabled(!waiting);
+            start.setAlpha(waiting ? 0.65f : 1f);
+            start.setText(waiting ? "正在加载随机开局..." : "开始对弈");
+            if (waiting && activity.customDifficultyLauncherVisible) {
+                activity.handler.postDelayed(refreshOpeningState[0], 120L);
+            }
+        };
+        openingMode.setOnClickListener(v -> {
+            activity.toggleCustomOpeningMode();
+            openingMode.setText(activity.customOpeningButtonText());
+            refreshOpeningState[0].run();
+        });
+        refreshOpeningState[0].run();
 
         Button random = launcherButton(activity, "随机分配");
         LinearLayout.LayoutParams randomLp = new LinearLayout.LayoutParams(

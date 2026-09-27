@@ -30,6 +30,7 @@ final class OpeningPositionController {
     private final ExecutorService loader = Executors.newSingleThreadExecutor();
     private volatile List<String> cachedPositions;
     private volatile boolean shutdown;
+    private volatile boolean loadScheduled;
 
     OpeningPositionController(MainActivity host) {
         // MainActivity 的字段初始化发生在 attachBaseContext() 之前；这里只保存引用，
@@ -53,7 +54,19 @@ final class OpeningPositionController {
 
     void preload() {
         if (cachedPositions != null || shutdown || loader.isShutdown()) return;
-        loader.execute(this::loadPositions);
+        synchronized (this) {
+            if (cachedPositions != null || shutdown || loader.isShutdown() || loadScheduled) return;
+            loadScheduled = true;
+        }
+        try {
+            loader.execute(this::loadPositions);
+        } catch (RuntimeException ignored) {
+            loadScheduled = false;
+        }
+    }
+
+    boolean isReady() {
+        return cachedPositions != null;
     }
 
     void chooseStartingFenAsync(String normalFen, Callback callback) {
@@ -103,6 +116,7 @@ final class OpeningPositionController {
             // The normal starting position remains the deterministic fallback.
         }
         cachedPositions = positions;
+        loadScheduled = false;
         return cachedPositions;
     }
 }
