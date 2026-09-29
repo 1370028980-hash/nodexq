@@ -1825,6 +1825,22 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         playbackController.start();
     }
 
+    boolean isPlaybackRunning() {
+        return playbackController.isRunning();
+    }
+
+    void refreshPlaybackButtonState() {
+        refreshNavigationButtons();
+    }
+
+    void refreshNavigationButtons() {
+        manualNavigationController.refreshNavigationButtons();
+    }
+
+    void refreshManualCommentEditor() {
+        manualNavigationController.refreshCommentEditor();
+    }
+
     void stopPlayback() {
         playbackController.stop();
     }
@@ -2305,7 +2321,7 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
             updatePlayerLabels();
             refreshBoardInputState();
             if (refreshContent) {
-                updateGameContent();
+                gameContentController.refreshAfterNavigation(previousPly);
                 appendLog("棋谱导航到 " + currentPly + "/" + engineMoves.size() + " 手。\n");
             }
             // 导航到末局时，若为绝杀/无子可动，补写局势图终局分数

@@ -3,6 +3,9 @@ package com.tyl.xiangqi.ndxq;
 import android.app.AlertDialog;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.text.Editable;
+import android.text.InputType;
+import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.ViewGroup;
 import android.widget.Button;
@@ -38,44 +41,88 @@ final class CorrectionBookController {
 
     void addCurrentPositionToCorrectionBook() {
         if (host.boardView == null || !host.ensureNodeStorageReady(true)) return;
-        final EditText input = new EditText(host);
-        input.setHint("错题名称");
-        input.setSingleLine(true);
-        new AlertDialog.Builder(host).setTitle("加入错题本").setView(input)
-                .setPositiveButton("确认", (d, w) -> {
-                    try {
-                        File dir = host.correctionDirectory();
-                        if (!dir.isDirectory() && !dir.mkdirs()) {
-                            throw new Exception("无法创建目录");
-                        }
-                        String stamp = new SimpleDateFormat("yyyyMMddHHmmss", Locale.CHINA)
-                                .format(new Date());
-                        int nextIndex = host.currentPly;
-                        if (nextIndex < 0 || nextIndex >= host.engineMoves.size()) {
-                            throw new Exception("当前局面没有可记录的下一步");
-                        }
-                        String name = input.getText() == null
-                                ? "" : input.getText().toString().trim();
-                        File out = new File(dir, stamp + ".pgn");
-                        String step = host.engineMoves.get(nextIndex);
-                        String readable = nextIndex < host.readableMoves.size()
-                                ? host.readableMoves.get(nextIndex) : step;
-                        StringBuilder body = new StringBuilder();
-                        body.append("[Game \"Chinese Chess\"]\n");
-                        body.append("[Event \"").append(escapeTag(name.length() > 0 ? name : "错题")).append("\"]\n");
-                        body.append("[Site \"节点象棋错题本\"]\n");
-                        body.append("[Result \"*\"]\n");
-                        body.append("[FEN \"").append(host.normalizeFen(host.boardView.getFen())).append("\"]\n\n");
-                        body.append("1. ").append(readable == null || readable.length() == 0 ? step : readable).append("\n*\n");
-                        try (FileOutputStream fos = new FileOutputStream(out)) {
-                            fos.write(body.toString().getBytes(StandardCharsets.UTF_8));
-                        }
-                        Toast.makeText(host, "已加入错题本", Toast.LENGTH_SHORT).show();
-                    } catch (Exception e) {
-                        Toast.makeText(host, "加入错题本失败：" + e.getMessage(),
-                                Toast.LENGTH_LONG).show();
-                    }
-                }).setNegativeButton("取消", null).show();
+        int wrongStep = host.currentPly + 1;
+        int lastStep = host.engineMoves.size();
+        if (wrongStep < 1 || wrongStep > lastStep) {
+            Toast.makeText(host, "当前局面没有可记录的下一步", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        showCorrectionRangeDialog(wrongStep, lastStep);
+    }
+
+    private void showCorrectionRangeDialog(int wrongStep, int lastStep) {
+        final int[] range = new int[]{Math.max(1, wrongStep - 1),
+                Math.min(lastStep, wrongStep + 1)};
+        LinearLayout content = new LinearLayout(host);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(host.dp(8), host.dp(6), host.dp(8), host.dp(2));
+        TextView currentMove = new TextView(host);
+        currentMove.setText("当前错招：第" + wrongStep + "步");
+        currentMove.setTextSize(16);
+        currentMove.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        content.addView(currentMove);
+
+        TextView rangeTitle = new TextView(host);
+        rangeTitle.setText("截取范围");
+        rangeTitle.setTextSize(14);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        titleLp.topMargin = host.dp(12);
+        content.addView(rangeTitle, titleLp);
+        EditText startInput = newRangeInput(range[0]);
+        EditText endInput = newRangeInput(range[1]);
+        Button startMinus = newRangeButton("−");
+        Button startPlus = newRangeButton("+");
+        Button endMinus = newRangeButton("−");
+        Button endPlus = newRangeButton("+");
+        TextView count = new TextView(host);
+        LinearLayout rangeRow = new LinearLayout(host);
+        rangeRow.setOrientation(LinearLayout.HORIZONTAL);
+        rangeRow.setGravity(Gravity.CENTER_VERTICAL);
+        rangeRow.addView(newRangeColumn("起始步", startInput, startMinus, startPlus),
+                new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        TextView separator = new TextView(host);
+        separator.setText("～");
+        separator.setTextSize(16);
+        separator.setGravity(Gravity.CENTER);
+        rangeRow.addView(separator, new LinearLayout.LayoutParams(
+                host.dp(24), ViewGroup.LayoutParams.WRAP_CONTENT));
+        rangeRow.addView(newRangeColumn("结束步", endInput, endMinus, endPlus),
+                new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        content.addView(rangeRow);
+
+        count.setTextSize(14);
+        count.setGravity(Gravity.CENTER);
+        content.addView(count, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, host.dp(32)));
+        Runnable refreshRange = () -> updateRangeSummary(count, range, wrongStep, lastStep,
+                startMinus, startPlus, endMinus, endPlus);
+        startMinus.setOnClickListener(v -> setRangeInput(startInput, range[0] - 1));
+        startPlus.setOnClickListener(v -> setRangeInput(startInput, range[0] + 1));
+        endMinus.setOnClickListener(v -> setRangeInput(endInput, range[1] - 1));
+        endPlus.setOnClickListener(v -> setRangeInput(endInput, range[1] + 1));
+        watchRangeInput(startInput, 0, 1, wrongStep, range, refreshRange);
+        watchRangeInput(endInput, 1, wrongStep, lastStep, range, refreshRange);
+        refreshRange.run();
+
+        TextView nameLabel = new TextView(host);
+        nameLabel.setText("错题名称");
+        nameLabel.setTextSize(14);
+        LinearLayout.LayoutParams nameLabelLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        nameLabelLp.topMargin = host.dp(8);
+        content.addView(nameLabel, nameLabelLp);
+        EditText nameInput = new EditText(host);
+        nameInput.setSingleLine(true);
+        nameInput.setText(currentWrongMoveName(wrongStep));
+        content.addView(nameInput);
+
+        new AlertDialog.Builder(host).setTitle("加入错题本").setView(content)
+                .setPositiveButton("确认", (d, w) -> saveCorrectionRange(
+                        wrongStep, safeRangeValue(startInput, range[0], 1, wrongStep),
+                        safeRangeValue(endInput, range[1], wrongStep, lastStep),
+                        nameInput.getText() == null ? "" : nameInput.getText().toString().trim()))
+                .setNegativeButton("取消", null).show();
     }
 
     void openFromSituation() {
@@ -499,5 +546,166 @@ final class CorrectionBookController {
         button.setTextColor(enabled ? host.globalBackgroundTextColor()
                 : Color.rgb(145, 150, 147));
         host.setRoundedBackground(button, host.globalSurfaceFillColor(), 5, Color.TRANSPARENT);
+    }
+
+    private EditText newRangeInput(int value) {
+        EditText input = new EditText(host);
+        input.setInputType(InputType.TYPE_CLASS_NUMBER);
+        input.setSingleLine(true);
+        input.setGravity(Gravity.CENTER);
+        input.setText(String.valueOf(value));
+        input.setSelectAllOnFocus(true);
+        return input;
+    }
+
+    private Button newRangeButton(String label) {
+        Button button = new Button(host);
+        button.setText(label);
+        button.setTextSize(18);
+        button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        button.setAllCaps(false);
+        button.setPadding(0, 0, 0, 0);
+        host.setRoundedBackground(button, host.globalSurfaceFillColor(), 5, Color.TRANSPARENT);
+        return button;
+    }
+
+    private LinearLayout newRangeColumn(String label, EditText input, Button minus, Button plus) {
+        LinearLayout column = new LinearLayout(host);
+        column.setOrientation(LinearLayout.VERTICAL);
+        TextView title = new TextView(host);
+        title.setText(label);
+        title.setTextSize(12);
+        title.setGravity(Gravity.CENTER);
+        column.addView(title);
+        LinearLayout number = new LinearLayout(host);
+        number.setGravity(Gravity.CENTER);
+        TextView prefix = new TextView(host);
+        prefix.setText("第");
+        number.addView(prefix);
+        number.addView(input, new LinearLayout.LayoutParams(0, host.dp(42), 1f));
+        TextView suffix = new TextView(host);
+        suffix.setText("步");
+        number.addView(suffix);
+        column.addView(number, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        LinearLayout buttons = new LinearLayout(host);
+        buttons.addView(minus, new LinearLayout.LayoutParams(0, host.dp(38), 1f));
+        LinearLayout.LayoutParams plusLp = new LinearLayout.LayoutParams(0, host.dp(38), 1f);
+        plusLp.leftMargin = host.dp(4);
+        buttons.addView(plus, plusLp);
+        column.addView(buttons);
+        return column;
+    }
+
+    private void watchRangeInput(EditText input, int index, int min, int max,
+                                 int[] range, Runnable refresh) {
+        input.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                if (s == null || s.length() == 0) return;
+                range[index] = clampRangeValue(s.toString(), range[index], min, max);
+                refresh.run();
+            }
+            @Override public void afterTextChanged(Editable s) {}
+        });
+        input.setOnFocusChangeListener((v, hasFocus) -> {
+            if (hasFocus) return;
+            int value = safeRangeValue(input, range[index], min, max);
+            if (!String.valueOf(value).contentEquals(input.getText())) {
+                input.setText(String.valueOf(value));
+            }
+        });
+    }
+
+    private void setRangeInput(EditText input, int value) {
+        input.setText(String.valueOf(value));
+    }
+
+    private int safeRangeValue(EditText input, int fallback, int min, int max) {
+        return clampRangeValue(input.getText() == null ? "" : input.getText().toString(),
+                fallback, min, max);
+    }
+
+    private int clampRangeValue(String text, int fallback, int min, int max) {
+        try {
+            return host.clamp(Integer.parseInt(text.trim()), min, max);
+        } catch (Exception ignored) {
+            return host.clamp(fallback, min, max);
+        }
+    }
+
+    private void updateRangeSummary(TextView count, int[] range, int wrongStep, int lastStep,
+                                    Button startMinus, Button startPlus,
+                                    Button endMinus, Button endPlus) {
+        count.setText("共" + (range[1] - range[0] + 1) + "步");
+        styleRangeButton(startMinus, range[0] > 1);
+        styleRangeButton(startPlus, range[0] < wrongStep);
+        styleRangeButton(endMinus, range[1] > wrongStep);
+        styleRangeButton(endPlus, range[1] < lastStep);
+    }
+
+    private void styleRangeButton(Button button, boolean enabled) {
+        button.setEnabled(enabled);
+        button.setTextColor(enabled ? host.globalBackgroundTextColor() : Color.rgb(145, 150, 147));
+    }
+
+    private String currentWrongMoveName(int wrongStep) {
+        int index = wrongStep - 1;
+        String readable = index < host.readableMoves.size() ? host.readableMoves.get(index) : "";
+        return readable == null || readable.length() == 0
+                ? host.engineMoves.get(index) : readable;
+    }
+
+    private void saveCorrectionRange(int wrongStep, int startStep, int endStep, String name) {
+        try {
+            startStep = host.clamp(startStep, 1, wrongStep);
+            endStep = host.clamp(endStep, wrongStep, host.engineMoves.size());
+            File dir = host.correctionDirectory();
+            if (!dir.isDirectory() && !dir.mkdirs()) throw new Exception("无法创建目录");
+
+            int restorePly = host.currentPly;
+            String fen;
+            try {
+                host.rebuildBoardToPly(startStep - 1);
+                fen = host.normalizeFen(host.boardView.getFen());
+            } finally {
+                host.rebuildBoardToPly(restorePly);
+            }
+
+            String stamp = new SimpleDateFormat("yyMMdd,HHmmss", Locale.CHINA)
+                    .format(new Date());
+            File out = new File(dir, stamp + ".pgn");
+            int suffix = 2;
+            while (out.exists()) out = new File(dir, stamp + "_" + suffix++ + ".pgn");
+            StringBuilder body = new StringBuilder();
+            body.append("[Game \"Chinese Chess\"]\n");
+            body.append("[Event \"").append(escapeTag(name.length() > 0 ? name : "错题")).append("\"]\n");
+            body.append("[Site \"节点象棋错题本\"]\n");
+            body.append("[Result \"*\"]\n");
+            body.append("[FEN \"").append(fen).append("\"]\n\n");
+            appendRangeMoves(body, startStep, endStep);
+            body.append("*\n");
+            try (FileOutputStream fos = new FileOutputStream(out)) {
+                fos.write(body.toString().getBytes(StandardCharsets.UTF_8));
+            }
+            Toast.makeText(host, "已加入错题本", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            Toast.makeText(host, "加入错题本失败：" + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void appendRangeMoves(StringBuilder body, int startStep, int endStep) {
+        for (int step = startStep; step <= endStep; step++) {
+            int index = step - 1;
+            int moveNumber = (step + 1) / 2;
+            if ((step & 1) == 1) body.append(moveNumber).append(". ");
+            else if (step == startStep) body.append(moveNumber).append("... ");
+            String move = index < host.readableMoves.size()
+                    ? host.readableMoves.get(index) : host.engineMoves.get(index);
+            if (move == null || move.length() == 0) move = host.engineMoves.get(index);
+            body.append(move);
+            if ((step & 1) == 0 || step == endStep) body.append('\n');
+            else body.append(' ');
+        }
     }
 }

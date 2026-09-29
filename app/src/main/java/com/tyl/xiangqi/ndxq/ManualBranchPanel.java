@@ -50,6 +50,7 @@ final class ManualBranchPanel {
 
     private final MainActivity activity;
     private EditText commentEdit;
+    private LinearLayout commentBox;
     private int visibleCommentIndex = Integer.MIN_VALUE;
 
     ManualBranchPanel(MainActivity activity) {
@@ -92,6 +93,7 @@ final class ManualBranchPanel {
 
     View buildCommentEditor(Comment comment, Actions actions) {
         LinearLayout box = new LinearLayout(activity);
+        commentBox = box;
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(activity.dp(4), activity.dp(3), activity.dp(4), activity.dp(3));
         activity.setRoundedBackground(box, activity.globalSurfaceFillColor(), 5,
@@ -131,8 +133,25 @@ final class ManualBranchPanel {
         updateCommentAppearance(value);
     }
 
+    void bindVisibleComment(Comment comment, Actions actions) {
+        if (commentEdit == null) return;
+        visibleCommentIndex = comment == null ? Integer.MIN_VALUE : comment.targetIndex;
+        String value = comment == null ? "" : comment.value;
+        boolean enabled = comment != null && comment.enabled;
+        commentEdit.setText(value);
+        commentEdit.setEnabled(enabled);
+        commentEdit.setOnClickListener(enabled
+                ? v -> actions.editComment(comment.targetIndex) : null);
+        if (commentBox != null) {
+            commentBox.setOnClickListener(enabled
+                    ? v -> actions.editComment(comment.targetIndex) : null);
+        }
+        updateCommentAppearance(value);
+    }
+
     void clearViewReferences() {
         commentEdit = null;
+        commentBox = null;
         visibleCommentIndex = Integer.MIN_VALUE;
     }
 

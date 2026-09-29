@@ -2,6 +2,7 @@ package com.tyl.xiangqi.ndxq;
 
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 
 /** 棋谱自动播放状态机，独立于导航按钮和棋盘页面布局。 */
 final class PlaybackController {
@@ -13,14 +14,16 @@ final class PlaybackController {
     private final Runnable step = new Runnable() {
         @Override public void run() {
             if (!running || host.boardView == null || host.currentPly >= host.engineMoves.size()) {
-                running = false;
+                finish();
                 return;
             }
+            long startedAt = SystemClock.uptimeMillis();
             host.navigateToPly(host.currentPly + 1);
             if (running && host.currentPly < host.engineMoves.size()) {
-                handler.postDelayed(this, host.playbackDelayMs());
+                long dueAt = startedAt + host.playbackDelayMs();
+                handler.postDelayed(this, Math.max(0L, dueAt - SystemClock.uptimeMillis()));
             } else {
-                running = false;
+                finish();
             }
         }
     };
@@ -41,12 +44,21 @@ final class PlaybackController {
         stop();
         if (host.boardView == null || host.currentPly >= host.engineMoves.size()) return;
         running = true;
+        host.refreshPlaybackButtonState();
         step.run();
     }
 
     void stop() {
         running = false;
         handler.removeCallbacks(step);
+        host.refreshPlaybackButtonState();
+    }
+
+    private void finish() {
+        if (!running) return;
+        running = false;
+        handler.removeCallbacks(step);
+        host.refreshPlaybackButtonState();
     }
 
     boolean isRunning() {

@@ -1,6 +1,7 @@
 package com.tyl.xiangqi.ndxq;
 
 import android.graphics.Paint;
+import android.graphics.Color;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -10,12 +11,18 @@ import android.widget.TextView;
 
 import com.tyl.xiangqi.ndxq.core.GameReportCalculator;
 import com.tyl.xiangqi.ndxq.ui.ChessBoardView;
+import com.tyl.xiangqi.ndxq.ui.CornerBadgeMoveView;
 
 import java.util.Collections;
+import java.util.ArrayList;
+import java.util.List;
 
 /** 棋盘页内容区的 View 组装与滚动状态控制。 */
 final class GameContentController {
     private final MainActivity host;
+    private final List<View> manualMoveCells = new ArrayList<View>();
+    private View manualStartCell;
+    private View manualMoveList;
 
     GameContentController(MainActivity host) {
         this.host = host;
@@ -35,6 +42,9 @@ final class GameContentController {
         host.manualBranchPanel.clearViewReferences();
         host.engineContentHost = null;
         host.situationPanel.clearViewReferences();
+        manualMoveCells.clear();
+        manualStartCell = null;
+        manualMoveList = null;
 
         if (host.evaluationMode && !host.completedDuelGame
                 && (host.boardView == null || !host.boardView.isEditMode())) {
@@ -66,6 +76,79 @@ final class GameContentController {
                             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         }
         host.updateRescoreReviewArrows();
+    }
+
+    void refreshAfterNavigation(int previousPly) {
+        if (host.gameContentHost == null) return;
+        boolean evaluationManual = host.evaluationMode && !host.completedDuelGame;
+        boolean manualPage = evaluationManual
+                || (host.selectedGameTab != 1 && host.selectedGameTab != 2)
+                || (host.selectedGameTab == 1 && host.combinedManualEngineMode);
+        if (!manualPage || manualStartCell == null || manualMoveList == null) {
+            updateGameContent();
+            return;
+        }
+
+        host.updateDrawButtonState();
+        updateManualMoveSelection(previousPly, host.currentPly);
+        refreshBranchList();
+        host.refreshManualCommentEditor();
+        if (host.combinedManualEngineMode) host.refreshEngineContentText();
+        if (host.manualScrollToCurrentPly) {
+            View selected = host.currentPly == 0 ? manualStartCell
+                    : (host.currentPly - 1 < manualMoveCells.size()
+                        ? manualMoveCells.get(host.currentPly - 1) : null);
+            if (selected != null) host.scrollManualRowIntoView(selected, manualMoveList);
+            host.manualScrollToCurrentPly = false;
+        }
+        host.updateRescoreReviewArrows();
+        host.refreshNavigationButtons();
+    }
+
+    private void updateManualMoveSelection(int previousPly, int currentPly) {
+        if (previousPly == 0 || currentPly == 0) {
+            TextView start = (TextView) manualStartCell;
+            boolean selected = currentPly == 0;
+            start.setTextColor(selected ? host.highlightTextColor()
+                    : host.globalBackgroundTextColor());
+            host.setRoundedBackground(start, selected ? host.highlightColor() : Color.TRANSPARENT,
+                    6, selected ? Color.TRANSPARENT : Color.rgb(226, 228, 224));
+        }
+        if (previousPly > 0) styleManualMoveCell(previousPly, false);
+        if (currentPly > 0) styleManualMoveCell(currentPly, true);
+    }
+
+    private void styleManualMoveCell(int ply, boolean selected) {
+        int index = ply - 1;
+        if (index < 0 || index >= manualMoveCells.size()) return;
+        View view = manualMoveCells.get(index);
+        TextView text = (TextView) view;
+        text.setTextColor(selected ? host.highlightTextColor() : host.globalBackgroundTextColor());
+        host.setRoundedBackground(view, selected ? host.highlightColor() : Color.TRANSPARENT,
+                6, selected ? Color.TRANSPARENT : Color.rgb(226, 228, 224));
+        if (view instanceof CornerBadgeMoveView) {
+            ((CornerBadgeMoveView) view).setCornerBadge(branchIndicator(index), selected);
+        }
+    }
+
+    private String branchIndicator(int node) {
+        List<ManualVariation> variations = host.manualVariations.get(node);
+        if (variations == null || variations.isEmpty()) return "";
+        int count = 1;
+        for (ManualVariation variation : variations) {
+            if (variation != null && !variation.engineSteps.isEmpty()) count++;
+        }
+        return count <= 1 ? "" : count + host.activeBranchLabel(node);
+    }
+
+    private void refreshBranchList() {
+        if (host.branchScrollView == null) return;
+        final int restoreY = host.branchScrollView.getScrollY();
+        host.branchScrollView.removeAllViews();
+        host.branchScrollView.addView(host.buildBranchList(), new ScrollView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        host.branchScrollY = restoreY;
+        host.branchScrollView.post(() -> host.branchScrollView.scrollTo(0, restoreY));
     }
 
     void keepNestedScrollGestures(View child) {
@@ -106,8 +189,11 @@ final class GameContentController {
         list.setPadding(host.dp(2), host.dp(2), host.dp(2), host.dp(8));
         list.setClipChildren(false);
         list.setClipToPadding(false);
+        manualMoveList = list;
+        manualMoveCells.clear();
         final View[] selectedManualRow = new View[1];
         TextView start = host.manualMoveRow("0. 初始局面", host.currentPly == 0);
+        manualStartCell = start;
         if (host.currentPly == 0) selectedManualRow[0] = start;
         start.setOnClickListener(v -> host.navigateToPly(0));
         list.addView(start, new LinearLayout.LayoutParams(
@@ -117,6 +203,7 @@ final class GameContentController {
             String text = redMove ? ((i / 2 + 1) + ". " + host.readableMoves.get(i))
                     : host.readableMoves.get(i);
             View move = host.manualMoveCell(text, host.currentPly == i + 1, i, redMove);
+            manualMoveCells.add(move);
             if (host.currentPly == i + 1) selectedManualRow[0] = move;
             final int target = i + 1;
             move.setOnClickListener(v -> host.navigateToPly(target));
@@ -219,8 +306,11 @@ final class GameContentController {
         list.setPadding(host.dp(2), host.dp(2), host.dp(2), host.dp(8));
         list.setClipChildren(false);
         list.setClipToPadding(false);
+        manualMoveList = list;
+        manualMoveCells.clear();
         final View[] selectedManualRow = new View[1];
         TextView start = host.manualMoveRow("0. 初始局面", host.currentPly == 0);
+        manualStartCell = start;
         if (host.currentPly == 0) selectedManualRow[0] = start;
         start.setOnClickListener(v -> host.navigateToPly(0));
         list.addView(start, new LinearLayout.LayoutParams(
@@ -232,6 +322,7 @@ final class GameContentController {
             int round = i / 2 + 1;
             View redMove = host.manualMoveCell(round + ". " + host.readableMoves.get(i),
                     host.currentPly == i + 1, i, true);
+            manualMoveCells.add(redMove);
             if (host.currentPly == i + 1) selectedManualRow[0] = redMove;
             final int redTarget = i + 1;
             redMove.setOnClickListener(v -> host.navigateToPly(redTarget));
@@ -241,6 +332,7 @@ final class GameContentController {
             if (i + 1 < host.readableMoves.size()) {
                 View blackMove = host.manualMoveCell(host.readableMoves.get(i + 1),
                         host.currentPly == i + 2, i + 1, false);
+                manualMoveCells.add(blackMove);
                 if (host.currentPly == i + 2) selectedManualRow[0] = blackMove;
                 final int blackTarget = i + 2;
                 blackMove.setOnClickListener(v -> host.navigateToPly(blackTarget));

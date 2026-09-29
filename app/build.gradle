@@ -16,8 +16,8 @@ android {
         applicationId 'com.tyl.xiangqi.nodechess'
         minSdk 23
         targetSdk 35
-        versionCode 62
-        versionName '20.9'
+        versionCode 63
+        versionName '21.0'
     }
 
     packagingOptions {

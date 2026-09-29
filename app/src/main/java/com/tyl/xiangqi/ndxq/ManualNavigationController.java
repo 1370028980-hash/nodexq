@@ -21,6 +21,11 @@ import java.util.List;
 /** 手动棋谱页的导航、注释和分支列表交互。 */
 final class ManualNavigationController {
     private final MainActivity host;
+    private TextView firstButton;
+    private TextView previousButton;
+    private TextView playButton;
+    private TextView nextButton;
+    private TextView lastButton;
 
     ManualNavigationController(MainActivity host) {
         this.host = host;
@@ -43,7 +48,45 @@ final class ManualNavigationController {
                 v -> navigateWithFollow(host.currentPly + 1)), squareNavLp());
         bar.addView(navButton("▶|", enabled && host.currentPly < host.engineMoves.size(),
                 v -> navigateWithFollow(host.engineMoves.size())), squareNavLp());
+        firstButton = (TextView) bar.getChildAt(0);
+        previousButton = (TextView) bar.getChildAt(1);
+        playButton = (TextView) bar.getChildAt(2);
+        nextButton = (TextView) bar.getChildAt(3);
+        lastButton = (TextView) bar.getChildAt(4);
+        refreshNavigationButtons();
         return bar;
+    }
+
+    void refreshNavigationButtons() {
+        boolean enabled = !host.isRescoring;
+        boolean canGoBack = enabled && host.currentPly > 0;
+        boolean canGoForward = enabled && host.currentPly < host.engineMoves.size();
+        boolean playing = host.isPlaybackRunning();
+        updateNavButton(firstButton, "|◀", canGoBack, false, v -> navigateWithFollow(0));
+        updateNavButton(previousButton, "←", canGoBack, false,
+                v -> navigateWithFollow(host.currentPly - 1));
+        updateNavButton(playButton, playing ? "■" : "▶", enabled && (playing || canGoForward),
+                true, v -> {
+                    if (host.isPlaybackRunning()) host.stopPlayback();
+                    else host.startPlayback();
+                });
+        updateNavButton(nextButton, "→", canGoForward, false,
+                v -> navigateWithFollow(host.currentPly + 1));
+        updateNavButton(lastButton, "▶|", canGoForward, false,
+                v -> navigateWithFollow(host.engineMoves.size()));
+    }
+
+    private void updateNavButton(TextView button, String label, boolean enabled, boolean black,
+                                 View.OnClickListener listener) {
+        if (button == null) return;
+        button.setText(label);
+        button.setTextSize(label.length() > 1 ? 10 : 12);
+        button.setEnabled(enabled);
+        button.setClickable(enabled);
+        button.setTextColor(enabled
+                ? (black ? Color.BLACK : host.globalBackgroundTextColor())
+                : Color.rgb(145, 150, 147));
+        button.setOnClickListener(enabled ? listener : null);
     }
 
     View buildAlignedNavigationRow() {
@@ -109,6 +152,11 @@ final class ManualNavigationController {
 
     View buildCommentEditor() {
         return host.manualBranchPanel.buildCommentEditor(currentManualComment(),
+                host.manualBranchActions);
+    }
+
+    void refreshCommentEditor() {
+        host.manualBranchPanel.bindVisibleComment(currentManualComment(),
                 host.manualBranchActions);
     }
 
