@@ -41,10 +41,11 @@ final class CorrectionBookController {
 
     void addCurrentPositionToCorrectionBook() {
         if (host.boardView == null || !host.ensureNodeStorageReady(true)) return;
-        int wrongStep = host.currentPly + 1;
+        // 错题指向当前正在浏览的着法，而不是当前局面之后的下一着。
+        int wrongStep = host.currentPly;
         int lastStep = host.engineMoves.size();
         if (wrongStep < 1 || wrongStep > lastStep) {
-            Toast.makeText(host, "当前局面没有可记录的下一步", Toast.LENGTH_SHORT).show();
+            Toast.makeText(host, "当前局面没有可记录的着法", Toast.LENGTH_SHORT).show();
             return;
         }
         showCorrectionRangeDialog(wrongStep, lastStep);

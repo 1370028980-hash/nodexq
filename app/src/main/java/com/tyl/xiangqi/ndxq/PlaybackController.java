@@ -18,6 +18,7 @@ final class PlaybackController {
                 return;
             }
             long startedAt = SystemClock.uptimeMillis();
+            host.manualScrollToCurrentPly = true;
             host.navigateToPly(host.currentPly + 1);
             if (running && host.currentPly < host.engineMoves.size()) {
                 long dueAt = startedAt + host.playbackDelayMs();
