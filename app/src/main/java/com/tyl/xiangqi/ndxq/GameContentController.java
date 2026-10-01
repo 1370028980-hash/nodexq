@@ -5,6 +5,7 @@ import android.graphics.Color;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -23,6 +24,7 @@ final class GameContentController {
     private final List<View> manualMoveCells = new ArrayList<View>();
     private View manualStartCell;
     private View manualMoveList;
+    private boolean manualCombinedLayout;
 
     GameContentController(MainActivity host) {
         this.host = host;
@@ -30,6 +32,10 @@ final class GameContentController {
 
     void updateGameContent() {
         if (host.gameContentHost == null) return;
+        if (pendingMoveFollow != null && manualMoveList != null) {
+            manualMoveList.getViewTreeObserver().removeOnPreDrawListener(pendingMoveFollow);
+            pendingMoveFollow = null;
+        }
         host.updateDrawButtonState();
         if (host.manualScrollView != null) host.manualScrollY = host.manualScrollView.getScrollY();
         if (host.branchScrollView != null) host.branchScrollY = host.branchScrollView.getScrollY();
@@ -76,6 +82,90 @@ final class GameContentController {
                             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         }
         host.updateRescoreReviewArrows();
+    }
+
+    void refreshAfterMove(int previousPly, boolean appended) {
+        boolean combined = host.combinedManualEngineMode
+                && !(host.evaluationMode && !host.completedDuelGame);
+        if (!appended || !(manualMoveList instanceof LinearLayout)
+                || combined != manualCombinedLayout
+                || host.manualScrollView == null
+                || previousPly != manualMoveCells.size()
+                || manualMoveCells.size() != host.engineMoves.size() - 1
+                || host.readableMoves.size() != host.engineMoves.size()) {
+            updateGameContent();
+            return;
+        }
+
+        LinearLayout list = (LinearLayout) manualMoveList;
+        int index = manualMoveCells.size();
+        boolean redMove = (index & 1) == 0;
+        String text = redMove ? (index / 2 + 1) + ". " + host.readableMoves.get(index)
+                : host.readableMoves.get(index);
+        View move = host.manualMoveCell(text, true, index, redMove);
+        final int target = index + 1;
+        move.setOnClickListener(v -> host.navigateToPly(target));
+        if (combined) {
+            list.addView(move, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, host.dp(31)));
+        } else {
+            LinearLayout roundRow;
+            if (redMove) {
+                roundRow = new LinearLayout(host);
+                roundRow.setOrientation(LinearLayout.HORIZONTAL);
+                roundRow.setClipChildren(false);
+                LinearLayout.LayoutParams moveLp = new LinearLayout.LayoutParams(0, host.dp(31), 1f);
+                moveLp.rightMargin = host.dp(1);
+                roundRow.addView(move, moveLp);
+                TextView empty = host.manualMoveRow("", false);
+                empty.setClickable(false);
+                LinearLayout.LayoutParams emptyLp = new LinearLayout.LayoutParams(0, host.dp(31), 1f);
+                emptyLp.leftMargin = host.dp(1);
+                roundRow.addView(empty, emptyLp);
+                list.addView(roundRow, new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, host.dp(32)));
+            } else {
+                roundRow = (LinearLayout) list.getChildAt(list.getChildCount() - 1);
+                roundRow.removeViewAt(1);
+                LinearLayout.LayoutParams moveLp = new LinearLayout.LayoutParams(0, host.dp(31), 1f);
+                moveLp.leftMargin = host.dp(1);
+                roundRow.addView(move, moveLp);
+            }
+            if (!(host.evaluationMode && !host.completedDuelGame)) {
+                int availableWidth = host.getResources().getDisplayMetrics().widthPixels - host.dp(16);
+                ViewGroup.LayoutParams lp = host.manualScrollView.getLayoutParams();
+                int width = Math.min(Math.max(lp.width, measureManualPaneWidth(text)),
+                        availableWidth - host.dp(165));
+                if (lp.width != width) {
+                    lp.width = width;
+                    host.manualScrollView.setLayoutParams(lp);
+                }
+            }
+        }
+        manualMoveCells.add(move);
+        refreshAfterNavigation(previousPly);
+        followAfterLayout(list);
+    }
+
+    private ViewTreeObserver.OnPreDrawListener pendingMoveFollow;
+
+    private void followAfterLayout(View list) {
+        ViewTreeObserver observer = list.getViewTreeObserver();
+        if (pendingMoveFollow != null) observer.removeOnPreDrawListener(pendingMoveFollow);
+        // 新着法完成布局后才滚动；同一帧连续落子只跟随最后一步。
+        pendingMoveFollow = new ViewTreeObserver.OnPreDrawListener() {
+            @Override public boolean onPreDraw() {
+                list.getViewTreeObserver().removeOnPreDrawListener(this);
+                if (pendingMoveFollow == this) pendingMoveFollow = null;
+                if (manualMoveList == list && host.currentPly > 0
+                        && host.currentPly <= manualMoveCells.size()) {
+                    host.scrollManualRowIntoView(manualMoveCells.get(host.currentPly - 1), list);
+                    host.autoFollowLatestMove = false;
+                }
+                return true;
+            }
+        };
+        observer.addOnPreDrawListener(pendingMoveFollow);
     }
 
     void refreshAfterNavigation(int previousPly) {
@@ -169,6 +259,7 @@ final class GameContentController {
 
     /** V18.5 棋谱+引擎二合一布局。 */
     private View buildCombinedManualEngineView() {
+        manualCombinedLayout = true;
         LinearLayout root = new LinearLayout(host);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(0, 0, 0, host.dp(3));
@@ -291,6 +382,7 @@ final class GameContentController {
     }
 
     private View buildManualView() {
+        manualCombinedLayout = false;
         LinearLayout root = new LinearLayout(host);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(0, 0, 0, host.dp(3));
@@ -429,6 +521,16 @@ final class GameContentController {
                     : host.readableMoves.get(i);
             widestText = Math.max(widestText, paint.measureText(text));
         }
+        return manualPaneWidthForText(widestText);
+    }
+
+    private int measureManualPaneWidth(String text) {
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setTextSize(14f * host.getResources().getDisplayMetrics().scaledDensity);
+        return manualPaneWidthForText(paint.measureText(text));
+    }
+
+    private int manualPaneWidthForText(float widestText) {
         int cellWidth = Math.round(widestText) + host.dp(24);
         cellWidth = host.clamp(cellWidth, host.dp(108), host.dp(150));
         int colWidth = cellWidth * 2 + host.dp(2);

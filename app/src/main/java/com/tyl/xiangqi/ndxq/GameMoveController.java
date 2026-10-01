@@ -177,6 +177,8 @@ final class GameMoveController {
 
     private void commitNewMove(String step, String readable, int score, int matePly,
                                char capturedPiece, boolean redToMoveNow) {
+        int previousPly = host.currentPly;
+        boolean appended = previousPly == host.engineMoves.size();
         host.engineMoves.add(step);
         host.readableMoves.add(readable == null || readable.trim().length() == 0
                 ? step : readable.trim());
@@ -198,7 +200,7 @@ final class GameMoveController {
         host.updatePlayerLabels();
         host.refreshBoardInputState();
         host.autoFollowLatestMove = true;
-        host.updateGameContent();
+        host.refreshGameContentAfterMove(previousPly, appended);
         if (!host.completedDuelGame) host.persistCurrentSession();
         if (!host.completedDuelGame && checkTerminalPosition(capturedPiece, redToMoveNow)) return;
         if (!host.completedDuelGame && !host.selfAnalysisMode

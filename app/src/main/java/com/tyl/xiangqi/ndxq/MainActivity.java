@@ -2134,6 +2134,10 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         gameContentController.updateGameContent();
     }
 
+    void refreshGameContentAfterMove(int previousPly, boolean appended) {
+        gameContentController.refreshAfterMove(previousPly, appended);
+    }
+
     void keepNestedScrollGestures(View child) {
         gameContentController.keepNestedScrollGestures(child);
     }
