@@ -5,6 +5,7 @@ import android.graphics.drawable.ColorDrawable;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -116,7 +117,41 @@ final class GameScreenController {
         host.updatePlayerLabels();
         host.refreshGameTabs();
         host.updateGameContent();
-        host.gamePageScroll.post(this::adjustContentHeightForViewport);
+        prepareFirstGameFrame();
+    }
+
+    /** Resolve viewport height and manual selection before exposing the first frame. */
+    private void prepareFirstGameFrame() {
+        final ScrollView page = host.gamePageScroll;
+        final LinearLayout content = host.gameContentHost;
+        page.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+            private boolean selectionPrepared;
+
+            @Override public boolean onPreDraw() {
+                if (host.gamePageScroll != page || host.gameContentHost != content) {
+                    removeListener();
+                    return true;
+                }
+                int previousHeight = content.getLayoutParams().height;
+                adjustContentHeightForViewport();
+                if (content.getLayoutParams().height != previousHeight) {
+                    selectionPrepared = false;
+                    return false;
+                }
+                if (!selectionPrepared && host.manualScrollView != null) {
+                    host.manualScrollView.showCurrentPly();
+                    selectionPrepared = true;
+                    return false;
+                }
+                removeListener();
+                return true;
+            }
+
+            private void removeListener() {
+                ViewTreeObserver observer = page.getViewTreeObserver();
+                if (observer.isAlive()) observer.removeOnPreDrawListener(this);
+            }
+        });
     }
 
     /**
