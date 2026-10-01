@@ -107,28 +107,6 @@ final class ManualNavigationController {
         host.navigateToPly(target);
     }
 
-    void scrollRowIntoView(View row, View listRoot) {
-        if (host.manualScrollView == null || row == null || listRoot == null) return;
-        int rowTop = descendantTop(row, listRoot);
-        int rowHeight = Math.max(host.dp(30), row.getHeight());
-        int viewport = Math.max(1, host.manualScrollView.getHeight());
-        int maxScroll = Math.max(0, listRoot.getHeight() - viewport);
-        int targetY = host.clamp(rowTop - Math.max(0, (viewport - rowHeight) / 2), 0, maxScroll);
-        host.manualScrollView.scrollTo(0, targetY);
-        host.manualScrollY = targetY;
-    }
-
-    private int descendantTop(View child, View ancestor) {
-        int top = 0;
-        View current = child;
-        while (current != null && current != ancestor) {
-            top += current.getTop();
-            android.view.ViewParent parent = current.getParent();
-            current = parent instanceof View ? (View) parent : null;
-        }
-        return top;
-    }
-
     private TextView navButton(String text, boolean enabled, View.OnClickListener listener) {
         TextView button = new TextView(host);
         button.setText(text);

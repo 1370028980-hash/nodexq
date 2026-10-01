@@ -238,7 +238,7 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
     TextView editDeleteAction;
     TextView editBlackFirstAction;
     TextView editRedFirstAction;
-    ScrollView manualScrollView;
+    ManualMoveListView manualScrollView;
     /** 新增棋步时自动跟随最新行；普通导航不设置此标记。 */
     boolean autoFollowLatestMove;
     ScrollView branchScrollView;
@@ -441,7 +441,6 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
     int sixtyMoveDrawArmedPly = -1;
     long lastAnalysisLogAt;
     long lastEngineUiAt;
-    int manualScrollY;
     int branchScrollY;
     /** 导航按钮改变局面后，棋谱页下一次布局自动把当前着法滚动到可见区域。 */
     boolean manualScrollToCurrentPly;
@@ -1766,7 +1765,6 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         rescoreController.reset();
         sixtyMoveDrawArmedPly = -1;
         selectedEditPiece = 0;
-        manualScrollY = 0;
         branchScrollY = 0;
         manualScrollToCurrentPly = false;
         engineScrollY = 0;
@@ -2154,10 +2152,6 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
 
     void navigateWithManualFollow(int target) {
         manualNavigationController.navigateWithFollow(target);
-    }
-
-    void scrollManualRowIntoView(View row, View listRoot) {
-        manualNavigationController.scrollRowIntoView(row, listRoot);
     }
 
     String branchLabelForOrdinal(int index) {

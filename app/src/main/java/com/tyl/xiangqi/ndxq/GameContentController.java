@@ -1,29 +1,21 @@
 package com.tyl.xiangqi.ndxq;
 
 import android.graphics.Paint;
-import android.graphics.Color;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ViewTreeObserver;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
-import android.widget.TextView;
 
 import com.tyl.xiangqi.ndxq.core.GameReportCalculator;
 import com.tyl.xiangqi.ndxq.ui.ChessBoardView;
-import com.tyl.xiangqi.ndxq.ui.CornerBadgeMoveView;
 
 import java.util.Collections;
-import java.util.ArrayList;
-import java.util.List;
 
 /** 棋盘页内容区的 View 组装与滚动状态控制。 */
 final class GameContentController {
     private final MainActivity host;
-    private final List<View> manualMoveCells = new ArrayList<View>();
-    private View manualStartCell;
-    private View manualMoveList;
+    private ManualMoveListView manualMoveList;
     private boolean manualCombinedLayout;
 
     GameContentController(MainActivity host) {
@@ -32,12 +24,7 @@ final class GameContentController {
 
     void updateGameContent() {
         if (host.gameContentHost == null) return;
-        if (pendingMoveFollow != null && manualMoveList != null) {
-            manualMoveList.getViewTreeObserver().removeOnPreDrawListener(pendingMoveFollow);
-            pendingMoveFollow = null;
-        }
         host.updateDrawButtonState();
-        if (host.manualScrollView != null) host.manualScrollY = host.manualScrollView.getScrollY();
         if (host.branchScrollView != null) host.branchScrollY = host.branchScrollView.getScrollY();
         if (host.engineScrollView != null) host.engineScrollY = host.engineScrollView.getScrollY();
         host.gameContentHost.removeAllViews();
@@ -48,8 +35,6 @@ final class GameContentController {
         host.manualBranchPanel.clearViewReferences();
         host.engineContentHost = null;
         host.situationPanel.clearViewReferences();
-        manualMoveCells.clear();
-        manualStartCell = null;
         manualMoveList = null;
 
         if (host.evaluationMode && !host.completedDuelGame
@@ -87,108 +72,42 @@ final class GameContentController {
     void refreshAfterMove(int previousPly, boolean appended) {
         boolean combined = host.combinedManualEngineMode
                 && !(host.evaluationMode && !host.completedDuelGame);
-        if (!appended || !(manualMoveList instanceof LinearLayout)
-                || combined != manualCombinedLayout
-                || host.manualScrollView == null
-                || previousPly != manualMoveCells.size()
-                || manualMoveCells.size() != host.engineMoves.size() - 1
-                || host.readableMoves.size() != host.engineMoves.size()) {
+        if (!appended || manualMoveList == null || combined != manualCombinedLayout) {
             updateGameContent();
             return;
         }
-
-        LinearLayout list = (LinearLayout) manualMoveList;
-        int index = manualMoveCells.size();
-        boolean redMove = (index & 1) == 0;
-        String text = redMove ? (index / 2 + 1) + ". " + host.readableMoves.get(index)
-                : host.readableMoves.get(index);
-        View move = host.manualMoveCell(text, true, index, redMove);
-        final int target = index + 1;
-        move.setOnClickListener(v -> host.navigateToPly(target));
-        if (combined) {
-            list.addView(move, new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, host.dp(31)));
-        } else {
-            LinearLayout roundRow;
-            if (redMove) {
-                roundRow = new LinearLayout(host);
-                roundRow.setOrientation(LinearLayout.HORIZONTAL);
-                roundRow.setClipChildren(false);
-                LinearLayout.LayoutParams moveLp = new LinearLayout.LayoutParams(0, host.dp(31), 1f);
-                moveLp.rightMargin = host.dp(1);
-                roundRow.addView(move, moveLp);
-                TextView empty = host.manualMoveRow("", false);
-                empty.setClickable(false);
-                LinearLayout.LayoutParams emptyLp = new LinearLayout.LayoutParams(0, host.dp(31), 1f);
-                emptyLp.leftMargin = host.dp(1);
-                roundRow.addView(empty, emptyLp);
-                list.addView(roundRow, new LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, host.dp(32)));
-            } else {
-                roundRow = (LinearLayout) list.getChildAt(list.getChildCount() - 1);
-                roundRow.removeViewAt(1);
-                LinearLayout.LayoutParams moveLp = new LinearLayout.LayoutParams(0, host.dp(31), 1f);
-                moveLp.leftMargin = host.dp(1);
-                roundRow.addView(move, moveLp);
-            }
-            if (!(host.evaluationMode && !host.completedDuelGame)) {
-                int availableWidth = host.getResources().getDisplayMetrics().widthPixels - host.dp(16);
-                ViewGroup.LayoutParams lp = host.manualScrollView.getLayoutParams();
-                int width = Math.min(Math.max(lp.width, measureManualPaneWidth(text)),
-                        availableWidth - host.dp(165));
-                if (lp.width != width) {
-                    lp.width = width;
-                    host.manualScrollView.setLayoutParams(lp);
-                }
+        if (!combined && !(host.evaluationMode && !host.completedDuelGame)
+                && !host.readableMoves.isEmpty()) {
+            int index = host.readableMoves.size() - 1;
+            String text = (index & 1) == 0
+                    ? (index / 2 + 1) + ". " + host.readableMoves.get(index)
+                    : host.readableMoves.get(index);
+            int availableWidth = host.getResources().getDisplayMetrics().widthPixels - host.dp(16);
+            ViewGroup.LayoutParams lp = manualMoveList.getLayoutParams();
+            int width = Math.min(Math.max(lp.width, measureManualPaneWidth(text)),
+                    availableWidth - host.dp(165));
+            if (lp.width != width) {
+                lp.width = width;
+                manualMoveList.setLayoutParams(lp);
             }
         }
-        manualMoveCells.add(move);
+        host.autoFollowLatestMove = true;
         refreshAfterNavigation(previousPly);
-        followAfterLayout(list);
-    }
-
-    private ViewTreeObserver.OnPreDrawListener pendingMoveFollow;
-
-    private void followAfterLayout(View list) {
-        ViewTreeObserver observer = list.getViewTreeObserver();
-        if (pendingMoveFollow != null) observer.removeOnPreDrawListener(pendingMoveFollow);
-        // 新着法完成布局后才滚动；同一帧连续落子只跟随最后一步。
-        pendingMoveFollow = new ViewTreeObserver.OnPreDrawListener() {
-            @Override public boolean onPreDraw() {
-                list.getViewTreeObserver().removeOnPreDrawListener(this);
-                if (pendingMoveFollow == this) pendingMoveFollow = null;
-                if (manualMoveList == list && host.currentPly > 0
-                        && host.currentPly <= manualMoveCells.size()) {
-                    host.scrollManualRowIntoView(manualMoveCells.get(host.currentPly - 1), list);
-                    host.autoFollowLatestMove = false;
-                }
-                return true;
-            }
-        };
-        observer.addOnPreDrawListener(pendingMoveFollow);
     }
 
     void refreshAfterNavigation(int previousPly) {
         if (host.gameContentHost == null) return;
-        boolean evaluationManual = host.evaluationMode && !host.completedDuelGame;
-        boolean manualPage = evaluationManual
-                || (host.selectedGameTab != 1 && host.selectedGameTab != 2)
-                || (host.selectedGameTab == 1 && host.combinedManualEngineMode);
-        if (!manualPage || manualStartCell == null || manualMoveList == null) {
+        if (manualMoveList == null) {
             updateGameContent();
             return;
         }
-
         host.updateDrawButtonState();
-        updateManualMoveSelection(previousPly, host.currentPly);
+        manualMoveList.refreshMoves();
         refreshBranchList();
         host.refreshManualCommentEditor();
-        if (host.combinedManualEngineMode) host.refreshEngineContentText();
+        if (manualCombinedLayout) host.refreshEngineContentText();
         if (host.manualScrollToCurrentPly || host.autoFollowLatestMove) {
-            View selected = host.currentPly == 0 ? manualStartCell
-                    : (host.currentPly - 1 < manualMoveCells.size()
-                        ? manualMoveCells.get(host.currentPly - 1) : null);
-            if (selected != null) host.scrollManualRowIntoView(selected, manualMoveList);
+            manualMoveList.showCurrentPly();
             host.manualScrollToCurrentPly = false;
             host.autoFollowLatestMove = false;
         }
@@ -196,50 +115,28 @@ final class GameContentController {
         host.refreshNavigationButtons();
     }
 
-    private void updateManualMoveSelection(int previousPly, int currentPly) {
-        if (previousPly == 0 || currentPly == 0) {
-            TextView start = (TextView) manualStartCell;
-            boolean selected = currentPly == 0;
-            start.setTextColor(selected ? host.highlightTextColor()
-                    : host.globalBackgroundTextColor());
-            host.setRoundedBackground(start, selected ? host.highlightColor() : Color.TRANSPARENT,
-                    6, selected ? Color.TRANSPARENT : Color.rgb(226, 228, 224));
-        }
-        if (previousPly > 0) styleManualMoveCell(previousPly, false);
-        if (currentPly > 0) styleManualMoveCell(currentPly, true);
-    }
-
-    private void styleManualMoveCell(int ply, boolean selected) {
-        int index = ply - 1;
-        if (index < 0 || index >= manualMoveCells.size()) return;
-        View view = manualMoveCells.get(index);
-        TextView text = (TextView) view;
-        text.setTextColor(selected ? host.highlightTextColor() : host.globalBackgroundTextColor());
-        host.setRoundedBackground(view, selected ? host.highlightColor() : Color.TRANSPARENT,
-                6, selected ? Color.TRANSPARENT : Color.rgb(226, 228, 224));
-        if (view instanceof CornerBadgeMoveView) {
-            ((CornerBadgeMoveView) view).setCornerBadge(branchIndicator(index), selected);
-        }
-    }
-
-    private String branchIndicator(int node) {
-        List<ManualVariation> variations = host.manualVariations.get(node);
-        if (variations == null || variations.isEmpty()) return "";
-        int count = 1;
-        for (ManualVariation variation : variations) {
-            if (variation != null && !variation.engineSteps.isEmpty()) count++;
-        }
-        return count <= 1 ? "" : count + host.activeBranchLabel(node);
+    private ManualMoveListView buildMoveList(boolean combined) {
+        ManualMoveListView list = new ManualMoveListView(host, combined);
+        manualMoveList = list;
+        host.manualScrollView = list;
+        keepNestedScrollGestures(list);
+        list.showCurrentPly();
+        host.manualScrollToCurrentPly = false;
+        host.autoFollowLatestMove = false;
+        return list;
     }
 
     private void refreshBranchList() {
         if (host.branchScrollView == null) return;
-        final int restoreY = host.branchScrollView.getScrollY();
-        host.branchScrollView.removeAllViews();
-        host.branchScrollView.addView(host.buildBranchList(), new ScrollView.LayoutParams(
+        final ScrollView scroll = host.branchScrollView;
+        final int restoreY = scroll.getScrollY();
+        scroll.removeAllViews();
+        scroll.addView(host.buildBranchList(), new ScrollView.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         host.branchScrollY = restoreY;
-        host.branchScrollView.post(() -> host.branchScrollView.scrollTo(0, restoreY));
+        scroll.post(() -> {
+            if (host.branchScrollView == scroll) scroll.scrollTo(0, restoreY);
+        });
     }
 
     void keepNestedScrollGestures(View child) {
@@ -276,57 +173,9 @@ final class GameContentController {
         manualAndNotes.setOrientation(LinearLayout.HORIZONTAL);
         manualAndNotes.setClipChildren(false);
 
-        LinearLayout list = new LinearLayout(host);
-        list.setOrientation(LinearLayout.VERTICAL);
-        list.setPadding(host.dp(2), host.dp(2), host.dp(2), host.dp(8));
-        list.setClipChildren(false);
-        list.setClipToPadding(false);
-        manualMoveList = list;
-        manualMoveCells.clear();
-        final View[] selectedManualRow = new View[1];
-        TextView start = host.manualMoveRow("0. 初始局面", host.currentPly == 0);
-        manualStartCell = start;
-        if (host.currentPly == 0) selectedManualRow[0] = start;
-        start.setOnClickListener(v -> host.navigateToPly(0));
-        list.addView(start, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, host.dp(30)));
-        for (int i = 0; i < host.readableMoves.size(); i++) {
-            boolean redMove = (i % 2) == 0;
-            String text = redMove ? ((i / 2 + 1) + ". " + host.readableMoves.get(i))
-                    : host.readableMoves.get(i);
-            View move = host.manualMoveCell(text, host.currentPly == i + 1, i, redMove);
-            manualMoveCells.add(move);
-            if (host.currentPly == i + 1) selectedManualRow[0] = move;
-            final int target = i + 1;
-            move.setOnClickListener(v -> host.navigateToPly(target));
-            list.addView(move, new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, host.dp(31)));
-        }
-
-        host.manualScrollView = new ScrollView(host);
-        keepNestedScrollGestures(host.manualScrollView);
-        host.manualScrollView.setFillViewport(false);
-        host.manualScrollView.setClipChildren(false);
-        host.manualScrollView.setClipToPadding(false);
-        host.manualScrollView.addView(list, new ScrollView.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        final int restoreY = host.manualScrollY;
-        final boolean followCurrentPly = host.manualScrollToCurrentPly || host.autoFollowLatestMove;
-        host.manualScrollView.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
-            @Override public void onLayoutChange(View v, int l, int t, int r, int b,
-                                                 int ol, int ot, int or, int ob) {
-                v.removeOnLayoutChangeListener(this);
-                if (followCurrentPly && selectedManualRow[0] != null) {
-                    host.scrollManualRowIntoView(selectedManualRow[0], list);
-                    host.manualScrollToCurrentPly = false;
-                    host.autoFollowLatestMove = false;
-                } else {
-                    host.manualScrollView.scrollTo(0, restoreY);
-                }
-            }
-        });
+        buildMoveList(true);
         manualAndNotes.addView(host.manualScrollView, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                host.dp(132), ViewGroup.LayoutParams.MATCH_PARENT));
 
         LinearLayout notePane = new LinearLayout(host);
         notePane.setOrientation(LinearLayout.VERTICAL);
@@ -370,7 +219,10 @@ final class GameContentController {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         host.refreshEngineContentText();
         final int restoreEngineY = host.engineScrollY;
-        host.engineScrollView.post(() -> host.engineScrollView.scrollTo(0, restoreEngineY));
+        final ScrollView engineScroll = host.engineScrollView;
+        engineScroll.post(() -> {
+            if (host.engineScrollView == engineScroll) engineScroll.scrollTo(0, restoreEngineY);
+        });
         enginePane.addView(host.engineScrollView, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         LinearLayout.LayoutParams enginePaneLp = new LinearLayout.LayoutParams(
@@ -394,76 +246,7 @@ final class GameContentController {
         LinearLayout contentRow = new LinearLayout(host);
         contentRow.setOrientation(LinearLayout.HORIZONTAL);
         contentRow.setClipChildren(false);
-        LinearLayout list = new LinearLayout(host);
-        list.setOrientation(LinearLayout.VERTICAL);
-        list.setPadding(host.dp(2), host.dp(2), host.dp(2), host.dp(8));
-        list.setClipChildren(false);
-        list.setClipToPadding(false);
-        manualMoveList = list;
-        manualMoveCells.clear();
-        final View[] selectedManualRow = new View[1];
-        TextView start = host.manualMoveRow("0. 初始局面", host.currentPly == 0);
-        manualStartCell = start;
-        if (host.currentPly == 0) selectedManualRow[0] = start;
-        start.setOnClickListener(v -> host.navigateToPly(0));
-        list.addView(start, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, host.dp(30)));
-        for (int i = 0; i < host.readableMoves.size(); i += 2) {
-            LinearLayout roundRow = new LinearLayout(host);
-            roundRow.setOrientation(LinearLayout.HORIZONTAL);
-            roundRow.setClipChildren(false);
-            int round = i / 2 + 1;
-            View redMove = host.manualMoveCell(round + ". " + host.readableMoves.get(i),
-                    host.currentPly == i + 1, i, true);
-            manualMoveCells.add(redMove);
-            if (host.currentPly == i + 1) selectedManualRow[0] = redMove;
-            final int redTarget = i + 1;
-            redMove.setOnClickListener(v -> host.navigateToPly(redTarget));
-            LinearLayout.LayoutParams redLp = new LinearLayout.LayoutParams(0, host.dp(31), 1f);
-            redLp.rightMargin = host.dp(1);
-            roundRow.addView(redMove, redLp);
-            if (i + 1 < host.readableMoves.size()) {
-                View blackMove = host.manualMoveCell(host.readableMoves.get(i + 1),
-                        host.currentPly == i + 2, i + 1, false);
-                manualMoveCells.add(blackMove);
-                if (host.currentPly == i + 2) selectedManualRow[0] = blackMove;
-                final int blackTarget = i + 2;
-                blackMove.setOnClickListener(v -> host.navigateToPly(blackTarget));
-                LinearLayout.LayoutParams blackLp = new LinearLayout.LayoutParams(0, host.dp(31), 1f);
-                blackLp.leftMargin = host.dp(1);
-                roundRow.addView(blackMove, blackLp);
-            } else {
-                TextView empty = host.manualMoveRow("", false);
-                empty.setClickable(false);
-                LinearLayout.LayoutParams emptyLp = new LinearLayout.LayoutParams(0, host.dp(31), 1f);
-                emptyLp.leftMargin = host.dp(1);
-                roundRow.addView(empty, emptyLp);
-            }
-            list.addView(roundRow, new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, host.dp(32)));
-        }
-        host.manualScrollView = new ScrollView(host);
-        keepNestedScrollGestures(host.manualScrollView);
-        host.manualScrollView.setFillViewport(false);
-        host.manualScrollView.setClipChildren(false);
-        host.manualScrollView.setClipToPadding(false);
-        host.manualScrollView.addView(list, new ScrollView.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        final int restoreY = host.manualScrollY;
-        final boolean followCurrentPly = host.manualScrollToCurrentPly || host.autoFollowLatestMove;
-        host.manualScrollView.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
-            @Override public void onLayoutChange(View v, int l, int t, int r, int b,
-                                                 int ol, int ot, int or, int ob) {
-                v.removeOnLayoutChangeListener(this);
-                if (followCurrentPly && selectedManualRow[0] != null) {
-                    host.scrollManualRowIntoView(selectedManualRow[0], list);
-                    host.manualScrollToCurrentPly = false;
-                    host.autoFollowLatestMove = false;
-                } else {
-                    host.manualScrollView.scrollTo(0, restoreY);
-                }
-            }
-        });
+        buildMoveList(false);
 
         LinearLayout branches = new LinearLayout(host);
         branches.setOrientation(LinearLayout.VERTICAL);
@@ -559,7 +342,10 @@ final class GameContentController {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         host.refreshEngineContentText();
         final int restoreY = host.engineScrollY;
-        host.engineScrollView.post(() -> host.engineScrollView.scrollTo(0, restoreY));
+        final ScrollView engineScroll = host.engineScrollView;
+        engineScroll.post(() -> {
+            if (host.engineScrollView == engineScroll) engineScroll.scrollTo(0, restoreY);
+        });
         root.addView(host.engineScrollView, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         return root;
