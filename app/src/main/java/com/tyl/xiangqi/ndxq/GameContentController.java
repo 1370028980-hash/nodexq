@@ -184,12 +184,13 @@ final class GameContentController {
         refreshBranchList();
         host.refreshManualCommentEditor();
         if (host.combinedManualEngineMode) host.refreshEngineContentText();
-        if (host.manualScrollToCurrentPly) {
+        if (host.manualScrollToCurrentPly || host.autoFollowLatestMove) {
             View selected = host.currentPly == 0 ? manualStartCell
                     : (host.currentPly - 1 < manualMoveCells.size()
                         ? manualMoveCells.get(host.currentPly - 1) : null);
             if (selected != null) host.scrollManualRowIntoView(selected, manualMoveList);
             host.manualScrollToCurrentPly = false;
+            host.autoFollowLatestMove = false;
         }
         host.updateRescoreReviewArrows();
         host.refreshNavigationButtons();

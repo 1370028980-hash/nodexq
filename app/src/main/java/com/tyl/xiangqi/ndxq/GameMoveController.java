@@ -59,7 +59,7 @@ final class GameMoveController {
             host.updatePlayerLabels();
             host.refreshBoardInputState();
             host.autoFollowLatestMove = true;
-            host.updateGameContent();
+            host.refreshGameContentAfterNavigation(host.currentPly - 1);
             if (!host.completedDuelGame && checkTerminalPosition(capturedPiece, redToMoveNow)) return;
             if (!host.completedDuelGame && !host.selfAnalysisMode
                     && host.checkNoAttackDraw(host.boardView.copyBoard())) {

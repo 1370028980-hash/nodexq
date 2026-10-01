@@ -1977,7 +1977,6 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         warmComputerSideEngine();
         appendLog("已进入自主分析模式：停止对弈引擎，双方均由玩家操作。\n");
         updatePlayerLabels();
-        updateGameContent();
         refreshBoardInputState();
         persistCurrentSession();
         if (analysisMode) continueManualAnalysisForCurrentPosition(20L);
@@ -2045,7 +2044,6 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         appendLog("已进入对弈模式：恢复难度“" + currentDifficultyDisplayName() + "”。\n");
         updateModeToggleButton();
         updatePlayerLabels();
-        updateGameContent();
         refreshBoardInputState();
         persistCurrentSession();
         if (analysisMode) continueManualAnalysisForCurrentPosition(20L);
@@ -2136,6 +2134,10 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
 
     void refreshGameContentAfterMove(int previousPly, boolean appended) {
         gameContentController.refreshAfterMove(previousPly, appended);
+    }
+
+    void refreshGameContentAfterNavigation(int previousPly) {
+        gameContentController.refreshAfterNavigation(previousPly);
     }
 
     void keepNestedScrollGestures(View child) {
@@ -3060,7 +3062,7 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         if (situationEngine != null) situationEngine.stopAnalysis();
         updatePlayerLabels();
         refreshBoardInputState();
-        updateGameContent();
+        refreshGameContentAfterNavigation(currentPly);
         appendLog("分析到达终局：" + message + "；未弹窗，也未计入历史战绩。\n");
     }
 
