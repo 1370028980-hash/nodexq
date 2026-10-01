@@ -70,6 +70,7 @@ final class GameContentController {
     }
 
     void refreshAfterMove(int previousPly, boolean appended) {
+        if (refreshNonManualPage()) return;
         boolean combined = host.combinedManualEngineMode
                 && !(host.evaluationMode && !host.completedDuelGame);
         if (!appended || manualMoveList == null || combined != manualCombinedLayout) {
@@ -97,6 +98,7 @@ final class GameContentController {
 
     void refreshAfterNavigation(int previousPly) {
         if (host.gameContentHost == null) return;
+        if (refreshNonManualPage()) return;
         if (manualMoveList == null) {
             updateGameContent();
             return;
@@ -113,6 +115,24 @@ final class GameContentController {
         }
         host.updateRescoreReviewArrows();
         host.refreshNavigationButtons();
+    }
+
+    /** Keep navigation views alive across ticks so a pending touch can finish on the same button. */
+    private boolean refreshNonManualPage() {
+        if (host.gameContentHost == null || manualMoveList != null
+                || (host.boardView != null && host.boardView.isEditMode())) return false;
+        if (host.selectedGameTab == 1 && !host.combinedManualEngineMode
+                && host.engineContentHost != null) {
+            host.refreshEngineContentText();
+        } else if (host.selectedGameTab == 2 && host.situationPanel.hasChart()) {
+            host.refreshSituationChart();
+        } else {
+            return false;
+        }
+        host.updateDrawButtonState();
+        host.updateRescoreReviewArrows();
+        host.refreshNavigationButtons();
+        return true;
     }
 
     private ManualMoveListView buildMoveList(boolean combined) {

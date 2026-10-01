@@ -65,7 +65,7 @@ final class ManualNavigationController {
         updateNavButton(firstButton, "|◀", canGoBack, false, v -> navigateWithFollow(0));
         updateNavButton(previousButton, "←", canGoBack, false,
                 v -> navigateWithFollow(host.currentPly - 1));
-        updateNavButton(playButton, playing ? "■" : "▶", enabled && (playing || canGoForward),
+        updateNavButton(playButton, playing ? "■" : "▶", playing || canGoForward,
                 true, v -> {
                     if (host.isPlaybackRunning()) host.stopPlayback();
                     else host.startPlayback();
