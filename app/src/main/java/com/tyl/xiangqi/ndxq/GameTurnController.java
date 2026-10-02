@@ -20,6 +20,7 @@ final class GameTurnController {
     void offerDraw() {
         if (host.boardView == null || host.boardView.isEditMode()
                 || host.gameOver || host.completedDuelGame || host.isRescoring) return;
+        if (host.currentPly != host.engineMoves.size()) return;
         if (host.evaluationMode && host.currentPly / 2 < 25) return;
         if (host.selfAnalysisMode) {
             Toast.makeText(host, "自主分析模式下无需提和", Toast.LENGTH_SHORT).show();
@@ -43,6 +44,7 @@ final class GameTurnController {
                 || host.gameOver || host.completedDuelGame || host.isRescoring
                 || host.selfAnalysisMode || host.autoMoveInProgress || host.engineThinking
                 || host.drawOfferInProgress) return;
+        if (host.currentPly != host.engineMoves.size()) return;
         if (host.evaluationMode && host.currentPly / 2 < 25) return;
         final boolean resumeAnalysis = host.analysisMode;
         if (host.analysisMode) host.manualEngine.stopAnalysis();
@@ -120,10 +122,15 @@ final class GameTurnController {
             Toast.makeText(host, "自主分析模式下无需认输", Toast.LENGTH_SHORT).show();
             return;
         }
+        final int generation = host.operationGeneration;
         new AlertDialog.Builder(host)
                 .setTitle("认输")
                 .setMessage("确定要认输吗？")
                 .setPositiveButton("确认", (d, w) -> {
+                    if (generation != host.operationGeneration || !host.gameScreenVisible
+                            || host.selfAnalysisMode || host.gameOver || host.completedDuelGame
+                            || host.boardView == null || host.boardView.isEditMode()
+                            || host.isRescoring) return;
                     boolean redWins = host.enginePlaysRed;
                     host.finishGame(redWins ? "黑方认输，红方胜了" : "红方认输，黑方胜了",
                             redWins ? GameEndType.RED_WIN : GameEndType.BLACK_WIN);

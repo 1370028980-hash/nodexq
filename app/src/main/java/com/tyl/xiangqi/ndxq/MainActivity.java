@@ -405,7 +405,7 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
             new DuelEngineController(this);
     private final ManualRecordController manualRecordController =
             new ManualRecordController(this);
-    private final GameSessionController gameSessionController =
+    final GameSessionController gameSessionController =
             new GameSessionController(this);
     private final GameEndDialogController gameEndDialogController =
             new GameEndDialogController(this);
@@ -480,6 +480,15 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         if (!evaluationMode || selfAnalysisMode || !ratingEligible || ratingDisqualified) return;
         ratingDisqualified = true;
         appendLog("本局已取消等级分计算资格：" + reason + "；连胜记录保留。\n");
+        persistCurrentSession();
+    }
+
+    void leaveCustomDifficultySessionForAnalysis() {
+        customDifficultySession = false;
+    }
+
+    boolean isCustomDifficultySession() {
+        return customDifficultySession;
     }
     /** 棋谱+引擎二合一布局开关。 */
     boolean combinedManualEngineMode;
@@ -815,8 +824,7 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
     }
 
     void handleEvaluationLauncherStart() {
-        if (evaluationSession && !gameScreenVisible && !completedDuelGame
-                && !engineMoves.isEmpty()) {
+        if (gameSessionController.hasInMemoryEvaluationSession() && !gameScreenVisible) {
             resumeEvaluationSession();
             return;
         }
@@ -866,7 +874,7 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
     /** 二级入口只把未完成评测标成“继续”；已完成评测已经结算并清理，不得恢复。 */
     boolean evaluationResumeAvailable() {
         if (completedDuelGame) return false;
-        if (evaluationSession && !gameScreenVisible && !engineMoves.isEmpty()) return true;
+        if (gameSessionController.hasInMemoryEvaluationSession() && !gameScreenVisible) return true;
         return readSavedEvaluationSession() != null;
     }
 
@@ -1055,8 +1063,13 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
                 + (enginePlaysRed ? "红" : "黑") + "，玩家等级分 " + playerRating + "。\n");
     }
 
+    boolean matchesEvaluationOpponent() {
+        return selectedDifficultyIndex == evaluationDifficultyIndex
+                && enginePlaysRed == evaluationEnginePlaysRed;
+    }
+
     private void resumeEvaluationSession() {
-        if (!evaluationSession || engineMoves.isEmpty()) {
+        if (!gameSessionController.hasInMemoryEvaluationSession()) {
             startEvaluationSession();
             return;
         }
@@ -1596,9 +1609,7 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         // 分析模式内“新建”同样只重置棋盘数据，不重复构造整个页面。
         boolean reuseGameScreen = gameScreenVisible && boardView != null && selfAnalysisMode;
         clearSavedSession(true);
-        evaluationMode = false;
-        evaluationSession = false;
-        customDifficultySession = false;
+        gameSessionController.enterAnalysisSession();
         selfAnalysisMode = true;
         saveLauncherPreferences();
         resetGameState();
@@ -1649,6 +1660,7 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
 
     private void resumeSavedSession(SavedSession saved) {
         if (saved == null) return;
+        if (saved.analysisMode) gameSessionController.enterAnalysisSession();
         selfAnalysisMode = saved.analysisMode;
         selectedDifficultyIndex = clamp(saved.difficultyIndex, 0, DIFFICULTIES.length - 1);
         enginePlaysRed = saved.enginePlaysRed;
@@ -1967,6 +1979,7 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         ratingDisqualified = true;
         persistCurrentSession(true);
         stopSearchForPositionChange();
+        gameSessionController.enterAnalysisSession();
         selfAnalysisMode = true;
         autoMoveInProgress = false;
         engineThinking = false;
@@ -2968,7 +2981,13 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
             finishAnalysisPosition(message, type);
             return;
         }
-        if (gameOver && terminalDialogShown) return;
+        // 评测会话被切走、清理或恢复失败后，迟到的引擎回调只能按分析终局收束，
+        // 不能把一个已经失效的局面当成新评测结算。
+        if (evaluationMode && !evaluationSession) {
+            finishAnalysisPosition(message, type);
+            return;
+        }
+        if (completedDuelGame || (gameOver && terminalDialogShown)) return;
         applyTerminalSituationScore(type);
         gameOver = true;
         completedDuelGame = true;

@@ -32,6 +32,8 @@ final class DuelEngineController {
     private boolean canAutoMove() {
         return !host.pushModeActive && !host.selfAnalysisMode && host.gameScreenVisible
                 && host.boardView != null && !host.boardView.isEditMode()
+                && host.currentPly == host.engineMoves.size()
+                && !(host.evaluationMode && host.evaluationNavigationLocked)
                 && !(host.completedDuelGame && !host.postGameSandboxActive)
                 && !(host.gameOver && !host.completedDuelGame)
                 && !host.isRescoring && !host.drawOfferInProgress;

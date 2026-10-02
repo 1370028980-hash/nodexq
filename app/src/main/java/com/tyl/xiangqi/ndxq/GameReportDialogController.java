@@ -24,6 +24,7 @@ import java.util.Locale;
 
 /** 对局报告及错招列表的展示控制器，不参与评分计算和局面导航的实现。 */
 final class GameReportDialogController {
+    private static final String PREF_SOFTMIN_TAU = "report_softmin_tau";
     interface Source {
         GameReportCalculator.Report buildReport(double softMinTau);
         List<String> readableMoves();
@@ -36,6 +37,7 @@ final class GameReportDialogController {
     private final MainActivity activity;
     private final Source source;
     private double softMinTau = GameReportCalculator.PHASE_SOFTMIN_TAU;
+    private boolean tauLoaded;
     private AlertDialog dialog;
     private TextView redHeading;
     private TextView redDetail;
@@ -48,12 +50,23 @@ final class GameReportDialogController {
     }
 
     double softMinTau() {
+        // 控制器构造早于 Activity attach；首次计算报告时再读取 Context 偏好。
+        if (!tauLoaded) {
+            try {
+                double saved = Double.parseDouble(activity.getSharedPreferences(
+                        MainActivity.PREFS, MainActivity.MODE_PRIVATE).getString(
+                        PREF_SOFTMIN_TAU, String.valueOf(GameReportCalculator.PHASE_SOFTMIN_TAU)));
+                if (Double.isFinite(saved) && saved > 0) softMinTau = saved;
+            } catch (RuntimeException ignored) {
+            }
+            tauLoaded = true;
+        }
         return softMinTau;
     }
 
     void show() {
         dismiss();
-        GameReportCalculator.Report report = source.buildReport(softMinTau);
+        GameReportCalculator.Report report = source.buildReport(softMinTau());
         if (!report.complete) {
             Toast.makeText(activity, "对局评估不完整，请先补全所有局面评分", Toast.LENGTH_SHORT).show();
             return;
@@ -159,13 +172,16 @@ final class GameReportDialogController {
     private void applyTau(EditText tauInput, TextView hint) {
         try {
             double value = Double.parseDouble(tauInput.getText().toString().trim());
-            if (value <= 0) throw new IllegalArgumentException("τ 需大于 0");
+            if (!Double.isFinite(value) || value <= 0) throw new IllegalArgumentException("τ 需大于 0");
             GameReportCalculator.Report recalculated = source.buildReport(value);
             if (!recalculated.complete) {
                 Toast.makeText(activity, "对局评估不完整，请先补全所有局面评分", Toast.LENGTH_SHORT).show();
                 return;
             }
             softMinTau = value;
+            tauLoaded = true;
+            activity.getSharedPreferences(MainActivity.PREFS, MainActivity.MODE_PRIVATE)
+                    .edit().putString(PREF_SOFTMIN_TAU, String.valueOf(value)).apply();
             bindSide(redHeading, redDetail, "红方", recalculated.red);
             bindSide(blackHeading, blackDetail, "黑方", recalculated.black);
             source.refreshReportButton(recalculated);

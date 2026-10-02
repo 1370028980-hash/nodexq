@@ -254,6 +254,7 @@ final class ManualRecordController {
         if (manual == null) throw new IllegalArgumentException("棋谱内容为空");
         host.stopSearchForPositionChange();
         host.invalidateSituationScoreRequests();
+        host.gameSessionController.enterAnalysisSession();
         host.baseFen = host.normalizeFen(manual.fen);
         XiangqiRules.fromFen(host.baseFen);
         host.boardView.setBoardFromFen(host.baseFen);

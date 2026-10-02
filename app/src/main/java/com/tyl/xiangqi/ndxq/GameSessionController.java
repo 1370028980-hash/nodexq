@@ -16,6 +16,21 @@ final class GameSessionController {
         this.host = host;
     }
 
+    /** 分析棋谱不能沿用评测身份；原评测留存由调用方在切换前保存。 */
+    void enterAnalysisSession() {
+        host.evaluationMode = false;
+        host.evaluationSession = false;
+        host.leaveCustomDifficultySessionForAnalysis();
+        host.ratingEligible = false;
+        host.ratingDisqualified = true;
+    }
+
+    boolean hasInMemoryEvaluationSession() {
+        return host.evaluationSession && !host.selfAnalysisMode
+                && !host.isCustomDifficultySession() && !host.completedDuelGame
+                && !host.gameOver;
+    }
+
     private String savedSessionKey(boolean analysis) {
         return analysis ? MainActivity.SAVED_ANALYSIS_RECORD : MainActivity.SAVED_GAME_RECORD;
     }
@@ -60,6 +75,9 @@ final class GameSessionController {
             snapshot.competitiveResultEligible = allowCompletedDuel
                     ? false : host.competitiveResultEligible;
             snapshot.completedDuelGame = allowCompletedDuel && host.completedDuelGame;
+            snapshot.ratingEligible = host.ratingEligible && !analysisRecord;
+            snapshot.ratingDisqualified = host.ratingDisqualified;
+            snapshot.ratingCounted = host.ratingCounted;
             snapshot.gameResultTag = host.gameResultTag;
             snapshot.baseFen = host.baseFen;
             snapshot.difficultyIndex = host.selectedDifficultyIndex;
@@ -102,7 +120,9 @@ final class GameSessionController {
     SavedSession readSavedEvaluationSession() {
         GameSessionRepository.ReadResult result = host.sessionRepository.read(MainActivity.SAVED_EVALUATION_RECORD,
                 false, host.selectedDifficultyIndex, host.enginePlaysRed, true);
-        if (result.session != null && result.session.completedDuelGame) {
+        if (result.session != null && (result.session.completedDuelGame
+                || result.session.ratingCounted || result.session.analysisMode
+                || !result.session.competitiveResultEligible)) {
             clearEvaluationSession();
             return null;
         }
@@ -179,6 +199,7 @@ final class GameSessionController {
         host.currentPly = host.evaluationMode && saved.currentPly >= 0
                 ? Math.min(host.engineMoves.size(), saved.currentPly)
                 : host.engineMoves.size();
+        if (host.currentPly < host.engineMoves.size()) host.rebuildBoardToPly(host.currentPly);
         host.completedDuelGame = saved.completedDuelGame && !host.selfAnalysisMode;
         host.evaluationNavigationLocked = saved.evaluationNavigationLocked && host.evaluationMode;
         host.postGameSandboxActive = false;
@@ -186,6 +207,10 @@ final class GameSessionController {
         host.terminalDialogShown = host.completedDuelGame;
         host.competitiveResultEligible = saved.competitiveResultEligible
                 && !host.selfAnalysisMode && !host.completedDuelGame;
+        host.ratingEligible = host.evaluationMode && host.evaluationSession
+                && host.competitiveResultEligible && saved.ratingEligible;
+        host.ratingDisqualified = saved.ratingDisqualified || host.selfAnalysisMode;
+        host.ratingCounted = saved.ratingCounted || host.completedDuelGame;
         host.resultRecordedForCurrentGame = host.completedDuelGame;
         host.gameResultTag = saved.gameResultTag == null || saved.gameResultTag.length() == 0
                 ? "*" : saved.gameResultTag;

@@ -18,6 +18,9 @@ final class SavedSession {
     boolean analysisMode;
     boolean competitiveResultEligible;
     boolean completedDuelGame;
+    boolean ratingEligible;
+    boolean ratingDisqualified;
+    boolean ratingCounted;
     boolean enginePlaysRed;
     boolean evaluationNavigationLocked;
     int difficultyIndex;

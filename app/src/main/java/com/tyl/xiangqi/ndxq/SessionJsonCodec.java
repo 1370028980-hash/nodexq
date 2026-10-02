@@ -18,10 +18,13 @@ final class SessionJsonCodec {
 
     static String encode(SavedSession session, String startFen) throws Exception {
         JSONObject root = new JSONObject();
-        root.put("schema", 7);
+        root.put("schema", 8);
         root.put("analysisMode", session.analysisMode);
         root.put("competitiveEligible", session.competitiveResultEligible);
         root.put("completedDuel", session.completedDuelGame);
+        root.put("ratingEligible", session.ratingEligible);
+        root.put("ratingDisqualified", session.ratingDisqualified);
+        root.put("ratingCounted", session.ratingCounted);
         root.put("resultTag", session.gameResultTag == null ? "*" : session.gameResultTag);
         String normalizedBaseFen = normalizeFen(session.baseFen);
         root.put("baseFen", normalizedBaseFen.length() == 0 ? startFen : normalizedBaseFen);
@@ -55,9 +58,14 @@ final class SessionJsonCodec {
                                int difficultyCount) throws Exception {
         JSONObject root = new JSONObject(raw);
         SavedSession saved = new SavedSession();
-        saved.analysisMode = analysis;
+        saved.analysisMode = analysis || root.optBoolean("analysisMode", false);
         saved.competitiveResultEligible = root.optBoolean("competitiveEligible", !analysis);
         saved.completedDuelGame = root.optBoolean("completedDuel", false) && !analysis;
+        saved.ratingEligible = root.optBoolean("ratingEligible",
+                saved.competitiveResultEligible && !saved.analysisMode && !saved.completedDuelGame);
+        saved.ratingDisqualified = root.optBoolean("ratingDisqualified",
+                !saved.competitiveResultEligible);
+        saved.ratingCounted = root.optBoolean("ratingCounted", saved.completedDuelGame);
         saved.gameResultTag = root.optString("resultTag", "*");
         String normalizedBaseFen = normalizeFen(root.optString("baseFen", startFen));
         saved.baseFen = normalizedBaseFen.length() == 0 ? startFen : normalizedBaseFen;
