@@ -350,7 +350,7 @@ final class ManualRecordController {
     void showBoardClipboardDialog() {
         final String[] items = host.evaluationMode
                 ? new String[]{"复制局面", "复制棋谱", "加入错题本"}
-                : new String[]{"复制局面", "复制棋谱", "粘贴", "加入错题本"};
+                : new String[]{"复制局面", "复制棋谱", "粘贴（支持天天象棋URL）", "加入错题本"};
         new AlertDialog.Builder(host)
                 .setTitle("棋盘操作")
                 .setItems(items, (dialog, which) -> {
