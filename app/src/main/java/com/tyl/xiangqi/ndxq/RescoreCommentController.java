@@ -1,5 +1,6 @@
 package com.tyl.xiangqi.ndxq;
 
+import com.tyl.xiangqi.ndxq.core.PositionScore;
 import java.util.List;
 
 /** Writes the optional re-score summary line without changing the user's comment body. */
@@ -41,11 +42,12 @@ final class RescoreCommentController {
     }
 
     private String summary(int redScore, int matePly) {
+        if (matePly == PositionScore.TERMINAL) {
+            return PREFIX + (redScore >= 0 ? "红方胜】" : "黑方胜】");
+        }
         if (matePly > 0) {
             return PREFIX + (redScore >= 0 ? "红方胜 M" : "黑方胜 M") + matePly + "】";
         }
-        if (redScore >= MainActivity.SITUATION_MATE_LIMIT) return PREFIX + "红方胜】";
-        if (redScore <= -MainActivity.SITUATION_MATE_LIMIT) return PREFIX + "黑方胜】";
         if (redScore > 0) return PREFIX + "红优 +" + redScore + "】";
         if (redScore < 0) return PREFIX + "黑优 +" + Math.abs(redScore) + "】";
         return PREFIX + "均势 0】";

@@ -65,7 +65,7 @@ final class ManualBranchPanel {
             TextView empty = branchRow("暂无分支", false);
             empty.setTextColor(Color.rgb(120, 124, 121));
             box.addView(empty, new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, activity.dp(ROW_HEIGHT_DP)));
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
             return box;
         }
 
@@ -86,7 +86,7 @@ final class ManualBranchPanel {
                 });
             }
             box.addView(row, new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, activity.dp(ROW_HEIGHT_DP)));
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         }
         return box;
     }
@@ -159,9 +159,13 @@ final class ManualBranchPanel {
         TextView row = new TextView(activity);
         row.setText(text);
         row.setTextSize(13);
-        row.setSingleLine(true);
+        row.setSingleLine(false);
+        row.setHorizontallyScrolling(false);
+        row.setEllipsize(null);
+        row.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_SIMPLE);
+        row.setMinHeight(activity.dp(ROW_HEIGHT_DP));
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(activity.dp(6), 0, activity.dp(4), 0);
+        row.setPadding(activity.dp(6), activity.dp(4), activity.dp(4), activity.dp(4));
         row.setTextColor(selected ? activity.highlightTextColor() : activity.globalBackgroundTextColor());
         activity.setRoundedBackground(row,
                 selected ? activity.highlightColor() : activity.globalSurfaceFillColor(),

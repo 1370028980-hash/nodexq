@@ -59,8 +59,10 @@ final class ManualMoveListView extends ListView {
             if (position == 0) {
                 TextView start = recycled instanceof TextView ? (TextView) recycled
                         : host.manualMoveRow("0. 初始局面", false);
+                if (!combined) enableWrapping(start);
                 start.setLayoutParams(new android.widget.AbsListView.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, host.dp(32)));
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        combined ? host.dp(32) : ViewGroup.LayoutParams.WRAP_CONTENT));
                 style(start, host.currentPly == 0);
                 start.setOnClickListener(v -> host.navigateToPly(0));
                 return start;
@@ -71,13 +73,19 @@ final class ManualMoveListView extends ListView {
             } else {
                 row = new LinearLayout(host);
                 row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setBaselineAligned(false);
                 row.setClipChildren(false);
+                if (!combined) row.setPadding(0, 0, 0, host.dp(1));
                 row.setLayoutParams(new android.widget.AbsListView.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, host.dp(combined ? 31 : 32)));
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        combined ? host.dp(31) : ViewGroup.LayoutParams.WRAP_CONTENT));
                 int columns = combined ? 1 : 2;
                 for (int column = 0; column < columns; column++) {
-                    View cell = host.manualMoveCell("", false, -1, false);
-                    LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, host.dp(31), 1f);
+                    TextView cell = (TextView) host.manualMoveCell("", false, -1, false);
+                    if (!combined) enableWrapping(cell);
+                    // 行高由换行较多的一格决定，另一格随行等高，红黑列宽保持不变。
+                    LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0,
+                            combined ? host.dp(31) : ViewGroup.LayoutParams.MATCH_PARENT, 1f);
                     if (column == 0 && !combined) lp.rightMargin = host.dp(1);
                     if (column == 1) lp.leftMargin = host.dp(1);
                     row.addView(cell, lp);
@@ -89,6 +97,15 @@ final class ManualMoveListView extends ListView {
             }
             return row;
         }
+    }
+
+    private void enableWrapping(TextView cell) {
+        cell.setSingleLine(false);
+        cell.setHorizontallyScrolling(false);
+        cell.setEllipsize(null);
+        cell.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_SIMPLE);
+        cell.setMinHeight(host.dp(31));
+        cell.setPadding(host.dp(7), host.dp(3), host.dp(5), host.dp(3));
     }
 
     private void bind(CornerBadgeMoveView cell, int index) {

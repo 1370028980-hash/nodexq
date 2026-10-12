@@ -198,6 +198,14 @@ final class SettingsController {
     }
 
     void showManualPlaySettingsDialog() {
+        // 输入值独立于启用状态保存；未勾选仅向引擎传 0，不再清空用户填过的值。
+        SharedPreferences preferences = host.getSharedPreferences(MainActivity.PREFS, Context.MODE_PRIVATE);
+        int savedTime = Math.max(1, preferences.getInt("manual_input_movetime_ms",
+                host.manualPlayLimit.moveTimeMs > 0 ? host.manualPlayLimit.moveTimeMs : 1000));
+        int savedDepth = Math.max(1, preferences.getInt("manual_input_depth",
+                Math.max(1, host.manualPlayLimit.depth)));
+        int savedNodes = Math.max(1, preferences.getInt("manual_input_nodes",
+                Math.max(1, host.manualPlayLimit.nodes)));
         LinearLayout panel = new LinearLayout(host);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(host.dp(14), host.dp(8), host.dp(14), host.dp(4));
@@ -210,21 +218,26 @@ final class SettingsController {
         time.setChecked(host.manualPlayLimit.moveTimeMs > 0);
         depth.setChecked(host.manualPlayLimit.depth > 0);
         nodes.setChecked(host.manualPlayLimit.nodes > 0);
-        EditText timeValue = manualTimeLimitEdit(formatManualSeconds(
-                host.manualPlayLimit.moveTimeMs), "秒");
-        EditText depthValue = manualLimitEdit(String.valueOf(
-                Math.max(1, host.manualPlayLimit.depth)), "层");
-        EditText nodesValue = manualLimitEdit(String.valueOf(
-                Math.max(1, host.manualPlayLimit.nodes)), "节点");
+        EditText timeValue = manualTimeLimitEdit(formatManualSeconds(savedTime), "秒");
+        EditText depthValue = manualLimitEdit(String.valueOf(savedDepth), "层");
+        EditText nodesValue = manualLimitEdit(String.valueOf(savedNodes), "节点");
         addLimitRow(panel, time, timeValue);
         addLimitRow(panel, depth, depthValue);
         addLimitRow(panel, nodes, nodesValue);
         new AlertDialog.Builder(host).setTitle("行棋设置").setView(panel)
                 .setPositiveButton("保存", (d, w) -> {
                     boolean any = time.isChecked() || depth.isChecked() || nodes.isChecked();
-                    int ms = time.isChecked() ? parsePositiveMilliseconds(timeValue, 2000) : 0;
-                    int dep = depth.isChecked() ? Math.max(1, parsePositive(depthValue, 20)) : 0;
-                    int nod = nodes.isChecked() ? Math.max(1, parsePositive(nodesValue, 500000)) : 0;
+                    int inputMs = parsePositiveMilliseconds(timeValue, savedTime);
+                    int inputDepth = parsePositive(depthValue, savedDepth);
+                    int inputNodes = parsePositive(nodesValue, savedNodes);
+                    preferences.edit()
+                            .putInt("manual_input_movetime_ms", inputMs)
+                            .putInt("manual_input_depth", inputDepth)
+                            .putInt("manual_input_nodes", inputNodes)
+                            .apply();
+                    int ms = time.isChecked() ? inputMs : 0;
+                    int dep = depth.isChecked() ? inputDepth : 0;
+                    int nod = nodes.isChecked() ? inputNodes : 0;
                     if (!any) ms = 100;
                     host.manualPlayLimit = PikafishEngine.SearchLimit.combined(dep, nod, ms);
                     host.setManualPlayLimitConfigured(true);
@@ -261,7 +274,7 @@ final class SettingsController {
             if (Double.isNaN(seconds) || Double.isInfinite(seconds) || seconds <= 0d) {
                 throw new NumberFormatException();
             }
-            return host.clamp((int) Math.round(seconds * 1000d), 1, Integer.MAX_VALUE);
+            return (int) Math.max(1L, Math.round(Math.min(seconds * 1000d, Integer.MAX_VALUE)));
         } catch (Exception ignored) {
             return Math.max(1, fallbackMs);
         }
@@ -286,7 +299,8 @@ final class SettingsController {
 
     private int parsePositive(EditText input, int fallback) {
         try {
-            return Math.max(1, Integer.parseInt(input.getText().toString().trim()));
+            int value = Integer.parseInt(input.getText().toString().trim());
+            return value > 0 ? value : fallback;
         } catch (Exception ignored) {
             return fallback;
         }
@@ -379,8 +393,8 @@ final class SettingsController {
                 new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(34)));
         infoBox.addView(aboutInfoRow("作者：赵芮（rui）"),
                 new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(34)));
-        infoBox.addView(aboutInfoRow("QQ交流群：511645431"),
-                new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(34)));
+        infoBox.addView(aboutQqGroupRow(), new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         TextView thanks = aboutParagraph(
                 "感谢Qsll项目以及Pikafish、Duffish、PikafishHCE、Tchess这几个开源项目，为本项目提供了重要的参考和帮助。");
@@ -420,6 +434,33 @@ final class SettingsController {
                     WindowManager.LayoutParams.WRAP_CONTENT);
         });
         aboutDialog = dialog;
+    }
+
+    private View aboutQqGroupRow() {
+        final String groupNumber = "511645431";
+        LinearLayout row = new LinearLayout(host);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setMinimumHeight(host.dp(34));
+        row.addView(aboutInfoRow("QQ交流群：" + groupNumber),
+                new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        Button copy = new Button(host);
+        copy.setText("复制群号");
+        copy.setAllCaps(false);
+        copy.setTextSize(11);
+        copy.setMinWidth(0);
+        copy.setMinimumWidth(0);
+        copy.setMinHeight(host.dp(30));
+        copy.setMinimumHeight(host.dp(30));
+        copy.setPadding(host.dp(7), host.dp(4), host.dp(7), host.dp(4));
+        copy.setTextColor(host.highlightTextColor());
+        host.setRoundedBackground(copy, host.highlightColor(), 6, Color.TRANSPARENT);
+        copy.setOnClickListener(v -> host.copyToClipboard("QQ交流群", groupNumber));
+        LinearLayout.LayoutParams copyLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        copyLp.leftMargin = host.dp(6);
+        row.addView(copy, copyLp);
+        return row;
     }
 
     private View aboutInfoRow(String text) {

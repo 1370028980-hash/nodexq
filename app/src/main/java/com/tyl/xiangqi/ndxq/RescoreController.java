@@ -85,8 +85,6 @@ final class RescoreController {
         }
 
         host.isRescoring = true;
-        host.reviewRefreshGeneration++;
-        host.reviewRefreshPly = -1;
         if (host.rescoreEngine != null) host.rescoreEngine.stopAnalysis();
         progressIndex = 0;
         progressTotal = totalSteps;

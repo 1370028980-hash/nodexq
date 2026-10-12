@@ -10,6 +10,8 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
 
+import com.tyl.xiangqi.ndxq.core.PositionScore;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -689,8 +691,7 @@ public final class V68SituationChartView extends View {
 
     private String pointLabel(Point point) {
         int round = (point.plyIndex + 2) / 2;
-        // ±6000 是规则终局补分；引擎普通分数即使超过 6000 也仍显示真实分值。
-        if (Math.abs(point.redScore) == MATE_LIMIT && point.matePly <= 0) {
+        if (point.matePly == PositionScore.TERMINAL) {
             return round + (point.redScore >= 0 ? "-红方胜" : "-黑方胜");
         }
         if (point.matePly > 0) {

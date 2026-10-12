@@ -49,6 +49,7 @@ import com.tyl.xiangqi.ndxq.book.ObkBook;
 import com.tyl.xiangqi.ndxq.core.ChineseNotation;
 import com.tyl.xiangqi.ndxq.core.Move;
 import com.tyl.xiangqi.ndxq.core.GameReportCalculator;
+import com.tyl.xiangqi.ndxq.core.PositionScore;
 import com.tyl.xiangqi.ndxq.core.PgnManualUtils;
 import com.tyl.xiangqi.ndxq.core.XqfManualUtils;
 import com.tyl.xiangqi.ndxq.core.XiangqiRules;
@@ -150,8 +151,6 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
     private final ExecutorService manualAnalysisStarter = Executors.newSingleThreadExecutor();
     /** V19.8：每次局面变化/暂停都会递增，阻止排队中的旧放大镜请求在稍后重新启动旧局面。 */
     volatile int manualAnalysisLaunchGeneration;
-    /** V19.2：刷新当前步走前推荐使用独立启动线程，不阻塞 UI 或 go infinite 启动。 */
-    private final ExecutorService reviewRefreshStarter = Executors.newSingleThreadExecutor();
     private final StringBuilder logBuffer = new StringBuilder();
     final List<String> engineMoves = new ArrayList<String>();
     final List<String> readableMoves = new ArrayList<String>();
@@ -176,9 +175,6 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
     /** V19.7：局势评分常早于“下一手”落子；按走前局面暂存 PV1/bestmove，落子时再写入对应复盘推荐。 */
     final Map<String, String> pendingSituationRecommendations =
             new HashMap<String, String>();
-    /** V19.2：放大镜分析时并行刷新“当前已走一步”的走前评分/PV1 推荐，避免优劣提示被实时分析清空。 */
-    volatile int reviewRefreshGeneration;
-    volatile int reviewRefreshPly = -1;
     final Map<Integer, List<ManualVariation>> manualVariations =
             new HashMap<Integer, List<ManualVariation>>();
     /** 每个分支节点当前显示线路的固定字母编号。字母跟随线路，不随点击切换。 */
@@ -2698,10 +2694,6 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         analysisDisplayController.updateRescoreReviewArrows();
     }
 
-    private boolean hasCompleteRescoreReview(int index) {
-        return analysisDisplayController.hasCompleteRescoreReview(index);
-    }
-
     void updateAnalysisArrows() {
         analysisDisplayController.updateAnalysisArrows();
     }
@@ -2780,138 +2772,9 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         }
     }
 
-    /**
-     * V19.2：如果当前浏览步已有完整重新打分结果，开启放大镜时用独立 rescoreEngine
-     * 对“走这一步之前的局面”做一次短刷新。这样当前步的 PV1 推荐与走前评分会更新，
-     * 而 manualEngine 的 go infinite 则持续更新走后评分，优劣等级因此可以随分析动态变化。
-     */
-    void startReviewRefreshForCurrentPly(final int analysisGeneration,
-                                                  final String positionKey) {
-        // V19.8：正式对局未结束时放大镜只提供当前局面的 PV，不再并发刷新复盘优劣数据。
-        if (!selfAnalysisMode && !completedDuelGame) return;
-        if (!analysisMode || isRescoring || currentPly <= 0 || boardView == null) return;
-        final int ply = currentPly;
-        final int index = ply - 1;
-        if (!hasCompleteRescoreReview(index)) return;
-        final int generation = ++reviewRefreshGeneration;
-        reviewRefreshPly = ply;
-        final List<String> beforeMoves = new ArrayList<String>(engineMoves.subList(0, index));
-        final boolean redToMoveBefore = redToMoveAtPly(index);
-        reviewRefreshStarter.execute(() -> {
-            if (!analysisMode || isRescoring || generation != reviewRefreshGeneration
-                    || analysisGeneration != operationGeneration) return;
-            ensureRescoreEngineAlive();
-            if (!analysisMode || isRescoring || generation != reviewRefreshGeneration
-                    || analysisGeneration != operationGeneration
-                    || rescoreEngine == null || !rescoreEngine.hasUsableEngine()) return;
-            rescoreEngine.stopAnalysis();
-            final PikafishEngine.EngineInfo[] latest = new PikafishEngine.EngineInfo[1];
-            rescoreEngine.requestBestMoveWithInfo(baseFen, beforeMoves,
-                    PikafishEngine.SearchLimit.movetime(1000),
-                    new PikafishEngine.AnalysisCallback() {
-                        @Override public void onInfo(PikafishEngine.EngineInfo info, String rawLine) {
-                            if (info == null || Math.max(1, info.multiPv) != 1) return;
-                            latest[0] = copyInfo(info);
-                            handler.post(() -> applyLiveReviewRefresh(generation, analysisGeneration,
-                                    positionKey, ply, index, redToMoveBefore, info, false));
-                        }
-
-                        @Override public void onBestMove(String bestMove, String rawInfo) {
-                            handler.post(() -> {
-                                if (!isLiveReviewRefreshValid(generation, analysisGeneration, positionKey, ply)) return;
-                                PikafishEngine.EngineInfo info = latest[0];
-                                applyLiveReviewRefresh(generation, analysisGeneration, positionKey, ply, index,
-                                        redToMoveBefore, info, true);
-                                String fallback = normalizeStep(bestMove);
-                                if (fallback.length() >= 4 && index < rescoreRecommendedMoves.size()) {
-                                    rescoreRecommendedMoves.set(index, fallback);
-                                }
-                                updateAnalysisArrows();
-                                refreshSituationChart();
-                                persistCurrentSession();
-                            });
-                        }
-
-                        @Override public void onError(String message) {
-                            handler.post(() -> {
-                                if (!isLiveReviewRefreshValid(generation, analysisGeneration, positionKey, ply)) return;
-                                if (latest[0] != null) {
-                                    applyLiveReviewRefresh(generation, analysisGeneration, positionKey, ply, index,
-                                            redToMoveBefore, latest[0], true);
-                                    persistCurrentSession();
-                                }
-                            });
-                        }
-                    });
-        });
-    }
-
-    private boolean isLiveReviewRefreshValid(int generation, int analysisGeneration,
-                                             String positionKey, int ply) {
-        return analysisMode && !isRescoring && generation == reviewRefreshGeneration
-                && analysisGeneration == operationGeneration && reviewRefreshPly == ply
-                && currentPly == ply && positionKey.equals(currentPositionKey());
-    }
-
-    private void applyLiveReviewRefresh(int generation, int analysisGeneration,
-                                        String positionKey, int ply, int index,
-                                        boolean redToMoveBefore, PikafishEngine.EngineInfo info,
-                                        boolean finalFrame) {
-        if (info == null || !isLiveReviewRefreshValid(generation, analysisGeneration, positionKey, ply)) return;
-        ensureScoreSize(engineMoves.size());
-        if (info.hasScore) {
-            int score = redScoreFromInfo(info, redToMoveBefore);
-            int mate = info.mateScore ? Math.abs(info.score) : 0;
-            if (index == 0) {
-                initialScoreRed = score;
-                initialMatePly = mate;
-                initialScoreKnown = true;
-                initialRescoreScoreKnown = true;
-            } else if (index - 1 < redPerspectiveScores.size()) {
-                redPerspectiveScores.set(index - 1, score);
-                scoreMatePlies.set(index - 1, mate);
-                scoreKnown.set(index - 1, true);
-                rescoreScoreKnown.set(index - 1, true);
-            }
-        }
-        String recommended = normalizeStep(info.firstMove());
-        if (recommended.length() >= 4 && index < rescoreRecommendedMoves.size()) {
-            rescoreRecommendedMoves.set(index, recommended);
-        }
-        updateAnalysisArrows();
-        if (finalFrame) refreshSituationChart();
-    }
-
     void updateCurrentSituationScoreFromAnalysis(PikafishEngine.EngineInfo info,
-                                                          boolean redToMoveAtRoot,
-                                                          String positionKey) {
-        // V19.8：未结束的正式对局中，放大镜只做提示，不覆盖固定 100ms 的赛后复盘评分来源。
-        if (!selfAnalysisMode && !completedDuelGame) return;
-        if (info == null || !info.hasScore || Math.max(1, info.multiPv) != 1
-                || !positionKey.equals(currentPositionKey())) return;
-        if (currentPly == 0) {
-            int newScore = redScoreFromInfo(info, redToMoveAtRoot);
-            int newMate = info.mateScore ? Math.abs(info.score) : 0;
-            invalidateInitialRescoreIfChanged(newScore, newMate);
-            initialScoreRed = newScore;
-            initialMatePly = newMate;
-            initialScoreKnown = true;
-            return;
-        }
-        int index = currentPly - 1;
-        ensureScoreSize(engineMoves.size());
-        if (index < 0 || index >= redPerspectiveScores.size()) return;
-        int newScore = redScoreFromInfo(info, redToMoveAtRoot);
-        int newMate = info.mateScore ? Math.abs(info.score) : 0;
-        // V19.2：若当前步已有完整重新打分提示，放大镜实时分析就是对这份提示的“刷新”，
-        // 不应因为分数变化把 rescore 标记撤销，否则优劣图标会立即消失。
-        boolean refreshExistingReview = hasCompleteRescoreReview(index);
-        if (!refreshExistingReview) invalidateRescoreIfChanged(index, newScore, newMate);
-        redPerspectiveScores.set(index, newScore);
-        scoreMatePlies.set(index, newMate);
-        scoreKnown.set(index, true);
-        if (refreshExistingReview && index < rescoreScoreKnown.size()) rescoreScoreKnown.set(index, true);
-        // 由 onInfo 的统一节流刷新负责重绘；这里仅更新数据，避免每条 info 重画曲线。
+                                                boolean redToMoveAtRoot, String positionKey) {
+        situationScoreController.updateCurrentFromAnalysis(info, redToMoveAtRoot, positionKey);
     }
 
     void immediateMove() {
@@ -3092,15 +2955,15 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         ensureScoreSize(engineMoves.size());
         int index = engineMoves.size() - 1;
         if (type == GameEndType.RED_WIN) {
-            invalidateRescoreIfChanged(index, SITUATION_MATE_LIMIT, 0);
+            invalidateRescoreIfChanged(index, SITUATION_MATE_LIMIT, PositionScore.TERMINAL);
             redPerspectiveScores.set(index, SITUATION_MATE_LIMIT);
-            scoreMatePlies.set(index, 0);
+            scoreMatePlies.set(index, PositionScore.TERMINAL);
             scoreKnown.set(index, true);
             rescoreScoreKnown.set(index, true);
         } else if (type == GameEndType.BLACK_WIN) {
-            invalidateRescoreIfChanged(index, -SITUATION_MATE_LIMIT, 0);
+            invalidateRescoreIfChanged(index, -SITUATION_MATE_LIMIT, PositionScore.TERMINAL);
             redPerspectiveScores.set(index, -SITUATION_MATE_LIMIT);
-            scoreMatePlies.set(index, 0);
+            scoreMatePlies.set(index, PositionScore.TERMINAL);
             scoreKnown.set(index, true);
             rescoreScoreKnown.set(index, true);
         }
@@ -3340,7 +3203,7 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         Integer terminal = terminalRedScoreForMoves(absoluteMoves);
         if (terminal != null) {
             task.variation.scores.set(localIndex, terminal);
-            task.variation.matePlies.set(localIndex, 0);
+            task.variation.matePlies.set(localIndex, PositionScore.TERMINAL);
             task.variation.scoreKnown.set(localIndex, true);
             task.variation.rescoreScoreKnown.set(localIndex, true);
             return true;
@@ -3377,7 +3240,7 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         Integer terminalScore = index == total - 1 ? terminalRedScoreAtPly(index + 1) : null;
         if (terminalScore != null) {
             redPerspectiveScores.set(index, terminalScore);
-            scoreMatePlies.set(index, 0);
+            scoreMatePlies.set(index, PositionScore.TERMINAL);
             scoreKnown.set(index, true);
             rescoreScoreKnown.set(index, true);
             refreshSituationChart();
@@ -3429,19 +3292,7 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
                     redToMove = !redToMove;
                 }
             }
-            boolean redKing = false;
-            boolean blackKing = false;
-            for (int r = 0; r < board.length; r++) {
-                for (int c = 0; c < board[r].length; c++) {
-                    if (board[r][c] == 'K') redKing = true;
-                    else if (board[r][c] == 'k') blackKing = true;
-                }
-            }
-            if (!redKing) return -SITUATION_MATE_LIMIT;
-            if (!blackKing) return SITUATION_MATE_LIMIT;
-            if (XiangqiRules.generateLegalMoves(board, redToMove).isEmpty()) {
-                return redToMove ? -SITUATION_MATE_LIMIT : SITUATION_MATE_LIMIT;
-            }
+            return PositionScore.terminalScore(board, redToMove);
         } catch (Exception ignored) {}
         return null;
     }
@@ -4035,7 +3886,6 @@ public final class MainActivity extends Activity implements ChessBoardView.Liste
         }
         handler.removeCallbacksAndMessages(null);
         manualAnalysisStarter.shutdownNow();
-        reviewRefreshStarter.shutdownNow();
         openingPositionController.shutdown();
         skinRuntimeController.shutdown();
         dismissDrawAnalysisDialog();

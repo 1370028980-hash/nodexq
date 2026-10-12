@@ -15,6 +15,7 @@ import com.tyl.xiangqi.ndxq.core.PgnManualUtils;
 import com.tyl.xiangqi.ndxq.core.PgnTextEscapes;
 import com.tyl.xiangqi.ndxq.core.XiangqiRules;
 import com.tyl.xiangqi.ndxq.core.XqfManualUtils;
+import com.tyl.xiangqi.ndxq.core.TencentShareLink;
 import com.tyl.xiangqi.ndxq.storage.ManualFileIo;
 import com.tyl.xiangqi.ndxq.ui.ManualStoreDialog;
 
@@ -349,7 +350,7 @@ final class ManualRecordController {
     void showBoardClipboardDialog() {
         final String[] items = host.evaluationMode
                 ? new String[]{"复制局面", "复制棋谱", "加入错题本"}
-                : new String[]{"复制局面", "复制棋谱", "粘贴", "粘贴（天天象棋URL）", "加入错题本"};
+                : new String[]{"复制局面", "复制棋谱", "粘贴", "加入错题本"};
         new AlertDialog.Builder(host)
                 .setTitle("棋盘操作")
                 .setItems(items, (dialog, which) -> {
@@ -357,27 +358,14 @@ final class ManualRecordController {
                     else if (which == 1) copyManual();
                     else if (host.evaluationMode) host.addCurrentPositionToCorrectionBook();
                     else if (which == 2) pasteFromClipboard();
-                    else if (which == 3) pasteTencentUrlFromClipboard();
                     else host.addCurrentPositionToCorrectionBook();
                 })
                 .setNegativeButton("取消", null)
                 .show();
     }
 
-    /** 从剪贴板读取天天象棋分享 URL，调用接口后直接载入为可分析棋谱。 */
-    private void pasteTencentUrlFromClipboard() {
-        ClipboardManager cm = (ClipboardManager) host.getSystemService(Context.CLIPBOARD_SERVICE);
-        if (cm == null || !cm.hasPrimaryClip() || cm.getPrimaryClip() == null
-                || cm.getPrimaryClip().getItemCount() == 0) {
-            Toast.makeText(host, "剪贴板为空", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        CharSequence value = cm.getPrimaryClip().getItemAt(0).coerceToText(host);
-        final String shareUrl = value == null ? "" : value.toString().trim();
-        if (!isTencentQipuUrl(shareUrl)) {
-            Toast.makeText(host, "未识别到包含 QipuId 的天天象棋链接", Toast.LENGTH_LONG).show();
-            return;
-        }
+    /** 使用统一粘贴入口读到的链接，避免二次读取剪贴板造成内容变化。 */
+    private void pasteTencentUrl(String shareUrl) {
         Toast.makeText(host, "正在获取天天象棋棋谱…", Toast.LENGTH_SHORT).show();
         new Thread(() -> {
             try {
@@ -401,23 +389,6 @@ final class ManualRecordController {
                 host.handler.post(() -> showRecognitionError("天天象棋接口调用失败：" + e.getMessage()));
             }
         }, "ttxq-url-loader").start();
-    }
-
-    /** 天天象棋分享链接可能经过 URL 编码，识别时兼容大小写和嵌套编码。 */
-    private boolean isTencentQipuUrl(String value) {
-        if (value == null || !value.matches("(?is).*https?://.*")) return false;
-        String probe = value;
-        for (int i = 0; i < 3; i++) {
-            if (probe.matches("(?is).*qipuid\\s*=.*")) return true;
-            try {
-                String decoded = java.net.URLDecoder.decode(probe, StandardCharsets.UTF_8.name());
-                if (decoded.equals(probe)) break;
-                probe = decoded;
-            } catch (Exception ignored) {
-                break;
-            }
-        }
-        return probe.matches("(?is).*qipuid\\s*=.*");
     }
 
     private String httpPostTencent(String shareUrl) throws Exception {
@@ -659,8 +630,19 @@ final class ManualRecordController {
         }
         CharSequence value = cm.getPrimaryClip().getItemAt(0).coerceToText(host);
         if (value == null) return;
-        String text = value.toString().trim();
+        String text = value.toString().replace('\uFEFF', ' ').trim();
+        if (text.isEmpty()) {
+            Toast.makeText(host, "剪贴板为空", Toast.LENGTH_SHORT).show();
+            return;
+        }
         try {
+            // 明确的本地棋谱优先；注释或 PGN 标签中的链接不能触发网络导入。
+            String shareUrl = isStandaloneFenOrMoves(text) || DhtmlXqManualUtils.looksLikeDhtmlXq(text)
+                    ? null : TencentShareLink.extract(text);
+            if (shareUrl != null) {
+                pasteTencentUrl(shareUrl);
+                return;
+            }
             if (isStandaloneFenOrMoves(text)) {
                 String normalizedText = text.trim().replaceAll("\\s+", " ");
                 if (normalizedText.toLowerCase(Locale.ROOT).startsWith("position fen ")) {

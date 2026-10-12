@@ -89,24 +89,17 @@ final class AnalysisDisplayController {
         int afterScore = host.redPerspectiveScores.get(index);
         int afterMate = host.scoreMatePlies.get(index);
         boolean redMover = host.redToMoveAtPly(index);
-        double loss = GameReportCalculator.moveLoss(
+        GameReportCalculator.MoveQuality moveQuality = GameReportCalculator.scoreMove(
                 beforeScore, beforeMate, afterScore, afterMate, redMover);
-        String quality;
+        String quality = moveQuality.label();
         int qualityColor;
-        if (loss <= 50d) {
-            quality = "★";
+        if ("★".equals(quality) || "优".equals(quality)) {
             qualityColor = Color.rgb(38, 158, 79);
-        } else if (loss <= 150d) {
-            quality = "优";
-            qualityColor = Color.rgb(38, 158, 79);
-        } else if (loss <= 500d) {
-            quality = "中";
+        } else if ("中".equals(quality)) {
             qualityColor = Color.rgb(213, 153, 38);
-        } else if (loss <= 1000d) {
-            quality = "差";
+        } else if ("差".equals(quality)) {
             qualityColor = Color.rgb(226, 112, 38);
         } else {
-            quality = "错";
             qualityColor = Color.rgb(201, 50, 48);
         }
 

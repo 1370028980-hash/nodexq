@@ -1,6 +1,7 @@
 package com.tyl.xiangqi.ndxq;
 
 import com.tyl.xiangqi.ndxq.core.Move;
+import com.tyl.xiangqi.ndxq.core.PositionScore;
 import com.tyl.xiangqi.ndxq.core.XiangqiRules;
 import com.tyl.xiangqi.ndxq.engine.PikafishEngine;
 
@@ -119,6 +120,7 @@ final class SituationScoreController {
                                             String bestMoveFallback) {
         if (generation != host.situationScoreGeneration
                 || !host.normalizeFen(requestFen).equals(host.normalizeFen(host.baseFen))) return;
+        if (host.initialMatePly == PositionScore.TERMINAL) return;
         if (info != null && info.hasScore) {
             int newScore = redScoreFromInfo(info, redToMove);
             int newMate = info.mateScore ? Math.abs(info.score) : 0;
@@ -217,6 +219,8 @@ final class SituationScoreController {
                                            String bestMoveFallback) {
         if (generation != host.situationScoreGeneration || !historyPrefixMatches(moves)) return;
         host.ensureScoreSize(host.engineMoves.size());
+        if (plyIndex < host.scoreMatePlies.size()
+                && host.scoreMatePlies.get(plyIndex) == PositionScore.TERMINAL) return;
         // 评分“走后局面”时返回的 PV1/bestmove，正好是下一手的走前推荐。
         storeSituationRecommendation(moves, plyIndex + 1, info, bestMoveFallback);
         if (info != null && info.hasScore) {
@@ -258,9 +262,9 @@ final class SituationScoreController {
                 boolean noLegal = XiangqiRules.generateLegalMoves(board, redToMoveAtPosition).isEmpty();
                 if (noLegal) {
                     int fallback = redToMoveAtPosition ? -MainActivity.SITUATION_MATE_LIMIT : MainActivity.SITUATION_MATE_LIMIT;
-                    invalidateRescoreIfChanged(plyIndex, fallback, 0);
+                    invalidateRescoreIfChanged(plyIndex, fallback, PositionScore.TERMINAL);
                     host.redPerspectiveScores.set(plyIndex, fallback);
-                    host.scoreMatePlies.set(plyIndex, 0);
+                    host.scoreMatePlies.set(plyIndex, PositionScore.TERMINAL);
                     host.scoreKnown.set(plyIndex, true);
                     host.rescoreScoreKnown.set(plyIndex, true);
                     host.refreshSituationChart();
@@ -330,6 +334,36 @@ final class SituationScoreController {
     void invalidateSituationScoreRequests() {
         host.situationScoreGeneration++;
         if (host.situationEngine != null) host.situationEngine.stopAnalysis();
+    }
+
+    /** 放大镜只写当前局面；走前评分和推荐着法沿用已保存的复盘基线。 */
+    void updateCurrentFromAnalysis(PikafishEngine.EngineInfo info, boolean redToMoveAtRoot,
+                                   String positionKey) {
+        if (!host.selfAnalysisMode && !host.completedDuelGame) return;
+        if (!host.analysisMode || host.isRescoring || info == null || !info.hasScore
+                || Math.max(1, info.multiPv) != 1
+                || !positionKey.equals(host.currentPositionKey())) return;
+        int score = redScoreFromInfo(info, redToMoveAtRoot);
+        int mate = info.mateScore ? Math.abs(info.score) : 0;
+        if (host.currentPly == 0) {
+            if (host.initialMatePly == PositionScore.TERMINAL) return;
+            boolean preserveReview = host.initialScoreKnown && host.initialRescoreScoreKnown;
+            if (!preserveReview) invalidateInitialRescoreIfChanged(score, mate);
+            host.initialScoreRed = score;
+            host.initialMatePly = mate;
+            host.initialScoreKnown = true;
+            return;
+        }
+        int index = host.currentPly - 1;
+        host.ensureScoreSize(host.engineMoves.size());
+        if (index < 0 || index >= host.redPerspectiveScores.size()
+                || host.scoreMatePlies.get(index) == PositionScore.TERMINAL) return;
+        boolean preserveReview = host.scoreKnown.get(index) && host.rescoreScoreKnown.get(index);
+        if (!preserveReview) invalidateRescoreIfChanged(index, score, mate);
+        host.redPerspectiveScores.set(index, score);
+        host.scoreMatePlies.set(index, mate);
+        host.scoreKnown.set(index, true);
+        // 不改邻步与推荐列表；由统一的 UI 节流刷新图表，停止/切换局面时保存会话。
     }
 
     int redScoreFromInfo(PikafishEngine.EngineInfo info, boolean redToMove) {

@@ -19,6 +19,7 @@ final class SessionJsonCodec {
     static String encode(SavedSession session, String startFen) throws Exception {
         JSONObject root = new JSONObject();
         root.put("schema", 8);
+        root.put("scoreSchema", 1);
         root.put("analysisMode", session.analysisMode);
         root.put("competitiveEligible", session.competitiveResultEligible);
         root.put("completedDuel", session.completedDuelGame);
@@ -92,6 +93,7 @@ final class SessionJsonCodec {
         readVariations(root.optJSONObject("variations"), saved.variations);
         readActiveBranchLabels(root.optJSONObject("activeBranchLabels"), saved.activeBranchLabels);
         normalizeSavedLists(saved);
+        if (root.optInt("scoreSchema", 0) < 1) SessionScoreMigration.upgrade(saved);
         return saved;
     }
 

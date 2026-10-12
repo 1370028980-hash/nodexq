@@ -5,18 +5,19 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * V18.5 对局报告评分器。
+ * 对局报告与棋盘质量标记共用的评分器。
  *
  * 输入评分统一使用“红方视角”保存：普通分为引擎分，Mate 局面以 score 的正负表示红/黑占优，
- * matePlies 保存绝杀距离。计算某一手质量时，再转换到该手走子方视角。
+ * matePlies 保存绝杀距离或 PositionScore.TERMINAL。计算时转换到走子方视角。
  */
 public final class GameReportCalculator {
     public static final double OPENING_WEIGHT = 0.23567d;
     public static final double MIDDLEGAME_WEIGHT = 0.76047d;
     public static final double ENDGAME_WEIGHT = 0.01906d;
     public static final double ERROR_LOSS_THRESHOLD = 1000d;
-    /** 非 Mate 且双方仍处于同方向的超高评估区时，L 不再用于错招统计/标注。 */
-    public static final int HIGH_SCORE_ERROR_IGNORE_THRESHOLD = 5500;
+    public static final double HIGH_SCORE_START = 4000d;
+    public static final double HIGH_SCORE_SCALE = 1000d;
+    private static final double FORCED_WIN_VALUE = HIGH_SCORE_START + HIGH_SCORE_SCALE;
     /** 阶段 SoftMin 默认温度。参数越大打分越宽松（趋近算术平均），越小越严格（更强调低分招法）。默认 15。 */
     public static final double PHASE_SOFTMIN_TAU = 15d;
 
@@ -77,9 +78,8 @@ public final class GameReportCalculator {
             int phase = round <= Math.max(0, openingRounds) ? 0
                     : (round >= effectiveEndgameRound ? 2 : 1);
             SideAccumulator side = redMover ? red : black;
-            // 高分饱和区只影响“是否算错招”，不影响单步分和阶段 SoftMin 聚合。
             side.add(phase, quality.score);
-            if (quality.errorEligible && quality.loss > ERROR_LOSS_THRESHOLD) {
+            if (quality.isError()) {
                 errors.add(i + 1);
                 side.addError();
                 side.addSevereBlunder(quality.score);
@@ -96,23 +96,19 @@ public final class GameReportCalculator {
         return scoreMove(beforeScoreRed, beforeMatePly, afterScoreRed, afterMatePly, redMover).loss;
     }
 
-    static MoveQuality scoreMove(int beforeScoreRed, int beforeMatePly,
+    public static MoveQuality scoreMove(int beforeScoreRed, int beforeMatePly,
                                  int afterScoreRed, int afterMatePly,
                                  boolean redMover) {
-        int perspective = redMover ? 1 : -1;
-        int before = beforeScoreRed * perspective;
-        int after = afterScoreRed * perspective;
-        int beforeMate = Math.max(0, beforeMatePly);
-        int afterMate = Math.max(0, afterMatePly);
-        // 局势图沿用 ±6000 + mate=0 表示规则终局；报告按 M1 处理，避免将绝杀只当普通 6000 分。
-        if (beforeMate == 0 && Math.abs(before) == 6000) beforeMate = 1;
-        if (afterMate == 0 && Math.abs(after) == 6000) afterMate = 1;
-        boolean beforeIsMate = beforeMate > 0;
-        boolean afterIsMate = afterMate > 0;
+        double before = redMover ? (double) beforeScoreRed : -(double) beforeScoreRed;
+        double after = redMover ? (double) afterScoreRed : -(double) afterScoreRed;
+        int beforeMate = Math.max(1, beforeMatePly);
+        int afterMate = Math.max(1, afterMatePly);
+        boolean beforeIsMate = PositionScore.isForced(beforeMatePly);
+        boolean afterIsMate = PositionScore.isForced(afterMatePly);
 
         double loss;
-        if (beforeIsMate && afterIsMate && Integer.signum(before) == Integer.signum(after)) {
-            int sign = Integer.signum(before);
+        if (beforeIsMate && afterIsMate && Math.signum(before) == Math.signum(after)) {
+            double sign = Math.signum(before);
             if (sign > 0 && afterMate > beforeMate) {
                 loss = (afterMate - beforeMate) * 300d * mateDiscount(beforeMate);
             } else if (sign < 0 && afterMate < beforeMate) {
@@ -120,32 +116,25 @@ public final class GameReportCalculator {
             } else {
                 loss = 0d;
             }
+            // 胜负性质没变，只评价杀棋效率；不把仍然成立的强制杀判成严重错招。
+            loss = Math.min(ERROR_LOSS_THRESHOLD, loss);
         } else {
-            loss = equivalentElo(before, beforeMate) - equivalentElo(after, afterMate);
+            double beforeValue = beforeIsMate ? Math.signum(before) * FORCED_WIN_VALUE
+                    : compressOrdinaryScore(before);
+            double afterValue = afterIsMate ? Math.signum(after) * FORCED_WIN_VALUE
+                    : compressOrdinaryScore(after);
+            loss = Math.max(0d, beforeValue - afterValue);
         }
-
-        boolean errorEligible = !sameDirectionHighNonMateZone(
-                before, beforeIsMate, after, afterIsMate);
-        return new MoveQuality(loss, scoreFromLoss(loss), errorEligible);
+        return new MoveQuality(loss, scoreFromLoss(loss));
     }
 
-    /**
-     * 只有走前、走后都没有 Mate 信息，且都已处在同一优势方向的 |score|>5500 区间，
-     * 才认为 L 对“错招”统计失去参考意义。跨越阈值、翻转优势方向或进入 Mate 均不豁免。
-     */
-    private static boolean sameDirectionHighNonMateZone(int before, boolean beforeIsMate,
-                                                        int after, boolean afterIsMate) {
-        if (beforeIsMate || afterIsMate) return false;
-        if (Math.abs(before) <= HIGH_SCORE_ERROR_IGNORE_THRESHOLD
-                || Math.abs(after) <= HIGH_SCORE_ERROR_IGNORE_THRESHOLD) return false;
-        return Integer.signum(before) == Integer.signum(after);
-    }
-
-    private static double equivalentElo(int perspectiveScore, int matePly) {
-        if (matePly <= 0) return perspectiveScore;
-        // M1=9000，M30=300，M31 及以上=0。
-        double magnitude = Math.max(0d, 9000d - (Math.max(1, matePly) - 1) * 300d);
-        return perspectiveScore >= 0 ? magnitude : -magnitude;
+    /** 4000 以内原值；超出部分平滑饱和到 5000，连接处的斜率仍为 1。 */
+    private static double compressOrdinaryScore(double score) {
+        double magnitude = Math.abs(score);
+        if (magnitude <= HIGH_SCORE_START) return score;
+        double compressed = HIGH_SCORE_START - HIGH_SCORE_SCALE
+                * Math.expm1(-(magnitude - HIGH_SCORE_START) / HIGH_SCORE_SCALE);
+        return Math.copySign(compressed, score);
     }
 
     private static double mateDiscount(int matePly) {
@@ -219,34 +208,49 @@ public final class GameReportCalculator {
         }
     }
 
-    static final class MoveQuality {
-        final double loss;
-        final double score;
-        final boolean errorEligible;
+    public static final class MoveQuality {
+        public final double loss;
+        public final double score;
 
-        MoveQuality(double loss, double score, boolean errorEligible) {
+        MoveQuality(double loss, double score) {
             this.loss = loss;
             this.score = score;
-            this.errorEligible = errorEligible;
+        }
+
+        public boolean isError() { return loss > ERROR_LOSS_THRESHOLD; }
+
+        public String label() {
+            if (loss <= 50d) return "★";
+            if (loss <= 150d) return "优";
+            if (loss <= 500d) return "中";
+            return isError() ? "错" : "差";
         }
     }
 
     private static final class SideAccumulator {
         private final double tau;
         private final double[] expSums = new double[3];
+        private final double[] minScores = {
+                Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY};
         private final int[] counts = new int[3];
         private int errors;
         /** 跨阶段记录最严重的大漏单步分，避免残局低权重把一次致命失误稀释掉。 */
         private double worstSevereScore = Double.NaN;
 
         SideAccumulator(double softMinTau) {
-            this.tau = softMinTau <= 0d ? PHASE_SOFTMIN_TAU : softMinTau;
+            this.tau = !Double.isFinite(softMinTau) || softMinTau <= 0d
+                    ? PHASE_SOFTMIN_TAU : softMinTau;
         }
 
         void add(int phase, double score) {
             int p = Math.max(0, Math.min(2, phase));
             double bounded = Math.max(0d, Math.min(100d, score));
-            expSums[p] += Math.exp(-bounded / tau);
+            // 以当前最低分平移指数，极小的合法 τ 也不会把所有指数下溢为 0。
+            if (bounded < minScores[p]) {
+                expSums[p] *= Math.exp(-(minScores[p] - bounded) / tau);
+                minScores[p] = bounded;
+            }
+            expSums[p] += Math.exp(-(bounded - minScores[p]) / tau);
             counts[p]++;
         }
 
@@ -295,8 +299,7 @@ public final class GameReportCalculator {
         double softMin(int phase) {
             if (counts[phase] <= 0) return Double.NaN;
             double averageExp = expSums[phase] / counts[phase];
-            if (averageExp <= 0d) return 0d;
-            double value = -tau * Math.log(averageExp);
+            double value = minScores[phase] - tau * Math.log(averageExp);
             return Math.max(0d, Math.min(100d, value));
         }
     }

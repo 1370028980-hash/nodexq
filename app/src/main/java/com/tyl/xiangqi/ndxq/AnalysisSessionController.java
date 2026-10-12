@@ -83,11 +83,8 @@ final class AnalysisSessionController {
         // 合法回调一并判成过期。
         host.manualAnalysisLaunchGeneration++;
         host.analysisMode = false;
-        host.reviewRefreshGeneration++;
-        host.reviewRefreshPly = -1;
         host.cancelImmediateMoveRequest();
         host.manualEngine.stopAnalysis();
-        if (!host.isRescoring && host.rescoreEngine != null) host.rescoreEngine.stopAnalysis();
         freezeDisplay();
         if (clearArrow && host.boardView != null) {
             host.boardView.setShowArrow(host.showEngineArrows);
@@ -116,8 +113,6 @@ final class AnalysisSessionController {
         if (!host.analysisMode) return;
         host.handler.removeCallbacks(analysisRestart);
         host.manualAnalysisLaunchGeneration++;
-        host.reviewRefreshGeneration++;
-        host.reviewRefreshPly = -1;
         clearPendingUiUpdates();
         host.cancelImmediateMoveRequest();
         if (host.manualEngine != null) host.manualEngine.stopAnalysis();
@@ -197,7 +192,6 @@ final class AnalysisSessionController {
         board.setShowArrow(host.showEngineArrows);
         board.setAnalysisArrows(Collections.<ChessBoardView.AnalysisArrow>emptyList());
         host.updateAnalysisArrows();
-        host.startReviewRefreshForCurrentPly(generation, positionKey);
 
         List<Move> legalRootMoves = board.legalMovesForSideToMove();
         ArrayList<String> allowed = new ArrayList<String>();
